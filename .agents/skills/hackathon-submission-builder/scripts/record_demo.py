@@ -39,6 +39,8 @@ def ensure_playwright(project_root: Path, explicit: Path | None, no_install: boo
         package_root = find_local_playwright(project_root)
     environment = os.environ.copy()
     if package_root and (package_root / "index.mjs").exists():
+        if not no_install:
+            run(["node", str(package_root / "cli.js"), "install", "chromium"], env=environment)
         return package_root, environment
     if no_install:
         raise RuntimeError("Playwright was not found; remove --no-install or pass --playwright-root")
