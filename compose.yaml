@@ -1,0 +1,45 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: dryvre
+      POSTGRES_USER: dryvre
+      POSTGRES_PASSWORD: dryvre
+    ports:
+      - "5432:5432"
+    volumes:
+      - dryvre-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dryvre"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+
+  app:
+    build: .
+    environment:
+      DATABASE_URL: postgres://dryvre:dryvre@postgres:5432/dryvre
+      HOST: 0.0.0.0
+      PORT: 3000
+      SESSION_SECRET: ${SESSION_SECRET:-development-only-secret-change-me!}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-5.6}
+    ports:
+      - "3000:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
+  migrate:
+    build: .
+    command: ["npm", "run", "db:migrate"]
+    environment:
+      DATABASE_URL: postgres://dryvre:dryvre@postgres:5432/dryvre
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  dryvre-postgres:

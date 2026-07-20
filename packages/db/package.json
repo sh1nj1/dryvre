@@ -1,0 +1,22 @@
+{
+  "name": "@dryvre/db",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": { ".": { "types": "./src/index.ts", "import": "./src/index.ts" }, "./schema": { "types": "./src/schema.ts", "import": "./src/schema.ts" } },
+  "scripts": {
+    "build": "tsup src/index.ts src/schema.ts --format esm --dts --clean",
+    "typecheck": "tsc -p tsconfig.json",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "tsx src/migrate.ts"
+  },
+  "dependencies": {
+    "drizzle-orm": "^0.45.2",
+    "postgres": "^3.4.7"
+  },
+  "devDependencies": {
+    "dotenv": "^17.2.1",
+    "drizzle-kit": "^0.31.4",
+    "tsup": "^8.5.0"
+  }
+}

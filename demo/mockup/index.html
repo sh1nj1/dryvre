@@ -1,0 +1,740 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Dryvre — One tree, every way of working</title>
+  <style>
+    :root {
+      --ink: #20221f;
+      --muted: #74776f;
+      --paper: #f6f4ee;
+      --panel: #fffef9;
+      --line: #dfddd4;
+      --soft-line: #ece9df;
+      --accent: #e45a36;
+      --accent-soft: #fbe5dc;
+      --lime: #c7ea74;
+      --violet: #6f64d8;
+      --violet-soft: #e8e5fa;
+      --green: #2f8a64;
+      --green-soft: #dff1e8;
+      --yellow: #e9bd55;
+      --yellow-soft: #f8efcf;
+      --shadow: 0 14px 40px rgba(45, 44, 39, .09);
+      --sidebar: 264px;
+      --context: 304px;
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body { height: 100%; }
+
+    body {
+      margin: 0;
+      overflow: hidden;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at 85% 4%, rgba(228, 90, 54, .09), transparent 24%),
+        var(--paper);
+      font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-size: 14px;
+    }
+
+    button, textarea, input { font: inherit; }
+    button { color: inherit; }
+
+    .app {
+      height: 100vh;
+      display: grid;
+      grid-template-columns: var(--sidebar) minmax(0, 1fr) var(--context);
+      grid-template-rows: 58px minmax(0, 1fr);
+    }
+
+    .topbar {
+      grid-column: 1 / -1;
+      display: grid;
+      grid-template-columns: var(--sidebar) minmax(0, 1fr) var(--context);
+      align-items: center;
+      border-bottom: 1px solid var(--line);
+      background: rgba(246, 244, 238, .88);
+      backdrop-filter: blur(18px);
+      z-index: 10;
+    }
+
+    .brand {
+      height: 100%;
+      display: flex;
+      align-items: center;
+      gap: 11px;
+      padding: 0 20px;
+      border-right: 1px solid var(--line);
+      font-weight: 760;
+      letter-spacing: -.03em;
+      font-size: 17px;
+    }
+
+    .brand-mark {
+      width: 28px;
+      height: 28px;
+      display: grid;
+      place-items: center;
+      border-radius: 8px 8px 8px 2px;
+      color: white;
+      background: var(--ink);
+      font-family: Georgia, serif;
+      font-size: 18px;
+    }
+
+    .crumbs {
+      min-width: 0;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 0 24px;
+      color: var(--muted);
+      white-space: nowrap;
+      overflow: hidden;
+    }
+
+    .crumbs strong { color: var(--ink); font-weight: 650; }
+    .crumb-sep { color: #b3b1a9; }
+
+    .top-actions {
+      height: 100%;
+      border-left: 1px solid var(--line);
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 8px;
+      padding: 0 16px;
+    }
+
+    .icon-btn, .ghost-btn, .primary-btn {
+      border: 1px solid var(--line);
+      background: var(--panel);
+      border-radius: 9px;
+      cursor: pointer;
+      transition: .18s ease;
+    }
+
+    .icon-btn:hover, .ghost-btn:hover { border-color: #bdbab0; transform: translateY(-1px); }
+    .icon-btn { width: 34px; height: 34px; display: grid; place-items: center; }
+    .ghost-btn { height: 34px; padding: 0 12px; }
+    .primary-btn { height: 36px; padding: 0 14px; border: 0; background: var(--ink); color: white; font-weight: 650; }
+    .primary-btn:hover { background: var(--accent); }
+
+    .avatar {
+      width: 31px;
+      height: 31px;
+      border-radius: 50%;
+      display: grid;
+      place-items: center;
+      background: var(--lime);
+      border: 2px solid var(--panel);
+      font-size: 11px;
+      font-weight: 800;
+    }
+
+    .sidebar {
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      border-right: 1px solid var(--line);
+      background: rgba(242, 240, 233, .72);
+    }
+
+    /* Scope annotation: visible product ideas that are intentionally not part of the hackathon MVP. */
+    .out-of-scope {
+      position: relative !important;
+      border: 1.5px dashed #d94a43 !important;
+      background-image: repeating-linear-gradient(135deg, rgba(217, 74, 67, .055) 0, rgba(217, 74, 67, .055) 5px, transparent 5px, transparent 10px) !important;
+    }
+
+    .out-of-scope::after {
+      content: "OUT OF MVP";
+      position: absolute;
+      z-index: 8;
+      top: -8px;
+      right: 7px;
+      padding: 2px 5px;
+      border-radius: 4px;
+      color: white;
+      background: #d94a43;
+      font-size: 7px;
+      font-weight: 900;
+      letter-spacing: .08em;
+      line-height: 1.2;
+      pointer-events: none;
+      white-space: nowrap;
+    }
+
+    .icon-btn.out-of-scope::after,
+    .count.out-of-scope::after {
+      display: none;
+    }
+
+    .side-tools { display: flex; gap: 7px; padding: 15px 14px 12px; }
+    .search {
+      flex: 1;
+      height: 34px;
+      padding: 0 10px;
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      color: var(--muted);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: rgba(255, 254, 249, .58);
+      font-size: 12px;
+      text-align: left;
+      cursor: pointer;
+    }
+    .search:hover { border-color: #bdbab0; color: var(--ink); background: var(--panel); }
+
+    .tree-wrap { overflow: auto; padding: 6px 10px 28px; }
+
+    .section-label {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 9px;
+      color: var(--muted);
+      font-size: 10px;
+      font-weight: 800;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+    }
+
+    .tree-row {
+      position: relative;
+      width: 100%;
+      min-height: 35px;
+      padding: 7px 8px;
+      border: 0;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      background: transparent;
+      text-align: left;
+      cursor: pointer;
+    }
+
+    .tree-row:hover { background: rgba(255, 255, 255, .6); }
+    .tree-row.active { background: var(--panel); box-shadow: 0 2px 8px rgba(45, 44, 39, .06); }
+    .tree-row.active::before { content: ""; position: absolute; left: -10px; width: 3px; height: 20px; border-radius: 2px; background: var(--accent); }
+    .tree-row .chev { width: 10px; color: #a6a49b; font-size: 10px; }
+    .tree-row .node-icon { width: 19px; text-align: center; font-size: 13px; }
+    .tree-row .node-label { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; font-weight: 560; }
+    .tree-row .count { min-width: 18px; padding: 2px 5px; border-radius: 8px; background: var(--accent); color: white; font-size: 9px; text-align: center; }
+    .level-1 { padding-left: 25px; }
+    .level-2 { padding-left: 45px; }
+
+    .side-footer {
+      margin-top: auto;
+      padding: 14px;
+      border-top: 1px solid var(--line);
+    }
+
+    .sync-status { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 11px; }
+    .sync-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); box-shadow: 0 0 0 4px var(--green-soft); }
+
+    main { min-width: 0; min-height: 0; display: flex; flex-direction: column; background: rgba(255, 254, 249, .55); }
+
+    .view-header {
+      padding: 22px 30px 15px;
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 20px;
+    }
+
+    .title-line { display: flex; align-items: center; gap: 12px; }
+    h1 { margin: 0; font-family: Georgia, "Times New Roman", serif; font-size: clamp(27px, 3vw, 38px); font-weight: 500; letter-spacing: -.035em; }
+    .subtitle { margin: 7px 0 0; color: var(--muted); font-size: 12px; }
+
+    .view-switcher {
+      padding: 4px;
+      display: flex;
+      gap: 2px;
+      border: 1px solid var(--line);
+      border-radius: 11px;
+      background: var(--paper);
+    }
+
+    .view-tab {
+      min-width: 84px;
+      height: 34px;
+      border: 0;
+      border-radius: 7px;
+      background: transparent;
+      color: var(--muted);
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 620;
+    }
+
+    .view-tab.active { color: var(--ink); background: var(--panel); box-shadow: 0 2px 7px rgba(45, 44, 39, .08); }
+
+    .tool-pill { height: 28px; padding: 0 10px; border: 1px solid var(--line); border-radius: 7px; display: flex; align-items: center; gap: 6px; background: transparent; color: var(--muted); font-size: 11px; cursor: pointer; }
+    .tool-pill:hover { color: var(--ink); background: var(--panel); }
+
+    .canvas { flex: 1; min-height: 0; overflow: auto; padding: 28px 30px 80px; }
+    .view { display: none; max-width: 920px; margin: 0 auto; }
+    .view.active { display: block; animation: rise .24s ease-out; }
+    @keyframes rise { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+
+    /* Document */
+    .doc-sheet { max-width: 790px; margin: 0 auto; }
+    .doc-kicker { display: flex; align-items: center; gap: 8px; margin-bottom: 22px; color: var(--accent); font-size: 11px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+    .doc-kicker::before { content: ""; width: 28px; height: 2px; background: var(--accent); }
+    .doc-block {
+      position: relative;
+      padding: 8px 10px 8px 28px;
+      border-radius: 8px;
+      border: 1px solid transparent;
+      cursor: text;
+    }
+    .doc-block:hover { border-color: var(--soft-line); background: rgba(255, 255, 255, .45); }
+    .doc-block.selected { border-color: #d8d4c8; background: var(--panel); box-shadow: 0 8px 24px rgba(52, 48, 39, .07); }
+    .drag-handle { position: absolute; left: 7px; top: 11px; color: #b7b4ab; opacity: 0; cursor: grab; letter-spacing: -2px; }
+    .doc-block:hover .drag-handle, .doc-block.selected .drag-handle { opacity: 1; }
+    .doc-h2 { margin: 0; font-family: Georgia, serif; font-size: 24px; font-weight: 500; letter-spacing: -.02em; }
+    .doc-h3 { margin: 0; font-size: 15px; font-weight: 750; }
+    .doc-p { margin: 0; color: #4f524d; font-size: 14px; line-height: 1.72; }
+    .doc-children { margin: 3px 0 9px 19px; padding-left: 13px; border-left: 1px solid var(--line); }
+    .task-line { display: flex; align-items: center; gap: 9px; line-height: 1.5; }
+    .check { width: 16px; height: 16px; flex: 0 0 auto; border: 1.5px solid #9b9b93; border-radius: 4px; display: grid; place-items: center; color: white; font-size: 10px; cursor: pointer; }
+    .check.done { background: var(--green); border-color: var(--green); }
+    .done-copy { color: var(--muted); text-decoration: line-through; }
+    .status-chip { display: inline-flex; align-items: center; gap: 5px; margin-left: 7px; padding: 3px 7px; border-radius: 5px; font-size: 9px; font-weight: 760; vertical-align: middle; }
+    .status-chip.progress { color: #6f5718; background: var(--yellow-soft); }
+    .status-chip.todo { color: #6256bf; background: var(--violet-soft); }
+    .status-chip.done { color: #24714f; background: var(--green-soft); }
+    .ref-chip { display: inline-flex; align-items: center; gap: 5px; padding: 2px 7px; border-radius: 5px; color: var(--violet); background: var(--violet-soft); font-size: 11px; font-weight: 650; cursor: pointer; }
+    /* Board */
+    .board { max-width: 1120px; margin: 0 auto; display: grid; grid-template-columns: repeat(3, minmax(190px, 1fr)); gap: 14px; align-items: start; }
+    .column { min-width: 0; }
+    .column-head { display: flex; align-items: center; gap: 8px; padding: 0 4px 12px; font-size: 11px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
+    .column-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--violet); }
+    .column:nth-child(2) .column-dot { background: var(--yellow); }
+    .column:nth-child(3) .column-dot { background: var(--green); }
+    .column-count { margin-left: auto; color: var(--muted); font-weight: 500; }
+    .cards { min-height: 300px; padding: 4px; border-radius: 13px; background: rgba(229, 226, 216, .42); }
+    .card { margin-bottom: 8px; padding: 14px; border: 1px solid var(--line); border-radius: 11px; background: var(--panel); box-shadow: 0 4px 14px rgba(45, 44, 39, .045); cursor: grab; transition: .18s ease; }
+    .card:hover { border-color: #c2bfb5; transform: translateY(-2px); box-shadow: var(--shadow); }
+    .card.selected { outline: 2px solid var(--accent); outline-offset: 1px; }
+    .card-meta { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 9px; }
+    .card-path { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .card-id { margin-left: auto; font-family: ui-monospace, monospace; }
+    .card h3 { margin: 11px 0 8px; font-size: 13px; line-height: 1.45; }
+    .card p { margin: 0; color: var(--muted); font-size: 11px; line-height: 1.55; }
+    .card-footer { display: flex; align-items: center; margin-top: 13px; }
+    .mini-avatar { width: 23px; height: 23px; border-radius: 50%; display: grid; place-items: center; background: var(--lime); font-size: 8px; font-weight: 800; }
+    .comment-count { margin-left: auto; color: var(--muted); font-size: 10px; }
+    .add-card { width: 100%; height: 34px; border: 1px dashed #c9c6bd; border-radius: 9px; background: transparent; color: var(--muted); cursor: pointer; }
+    .add-card:hover { color: var(--accent); border-color: var(--accent); }
+
+    /* Stream */
+    .stream-layout { max-width: 760px; margin: 0 auto; }
+    .stream-focus { margin-bottom: 20px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 10px; background: rgba(255, 254, 249, .72); display: flex; align-items: center; gap: 11px; }
+    .focus-glyph { width: 30px; height: 30px; display: grid; place-items: center; border-radius: 8px; background: var(--accent-soft); color: var(--accent); }
+    .focus-copy { flex: 1; }
+    .focus-copy span { display: block; color: var(--muted); font-size: 9px; text-transform: uppercase; letter-spacing: .09em; }
+    .focus-copy strong { display: block; margin-top: 3px; font-size: 12px; }
+    .message { display: grid; grid-template-columns: 36px minmax(0, 1fr); gap: 11px; margin: 19px 0; }
+    .message .avatar { width: 34px; height: 34px; }
+    .message.agent .avatar { color: white; background: var(--ink); border-radius: 9px 9px 9px 2px; }
+    .message-head { display: flex; align-items: center; gap: 8px; margin: 1px 0 7px; }
+    .message-head strong { font-size: 12px; }
+    .message-head span { color: #aaa79f; font-size: 10px; }
+    .message-body { color: #4d504b; line-height: 1.65; font-size: 13px; }
+    .message-body p { margin: 0 0 7px; }
+    .message-actions { margin-top: 7px; color: var(--muted); font-size: 10px; opacity: .75; }
+    .agent-output { margin-top: 10px; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--panel); }
+    .agent-block { padding: 11px 13px; border-bottom: 1px solid var(--soft-line); display: flex; align-items: flex-start; gap: 9px; font-size: 12px; }
+    .agent-block:last-child { border-bottom: 0; }
+    .agent-block::before { content: "↳"; color: var(--accent); font-weight: 800; }
+    .composer { position: sticky; bottom: 0; margin-top: 28px; padding: 11px; border: 1px solid #cfcbc0; border-radius: 13px; background: var(--panel); box-shadow: 0 15px 35px rgba(45, 44, 39, .12); }
+    .composer textarea { width: 100%; height: 52px; padding: 4px 5px; resize: none; border: 0; outline: 0; background: transparent; color: var(--ink); }
+    .composer textarea::placeholder { color: #aaa79f; }
+    .composer-actions { display: flex; align-items: center; gap: 7px; }
+    .context-chip { padding: 5px 8px; border-radius: 6px; background: var(--violet-soft); color: var(--violet); font-size: 10px; }
+    .send-btn { margin-left: auto; width: 31px; height: 31px; border: 0; border-radius: 8px; background: var(--ink); color: white; cursor: pointer; }
+
+    /* Context rail */
+    .context-rail { min-height: 0; display: flex; flex-direction: column; border-left: 1px solid var(--line); background: rgba(250, 248, 242, .8); }
+    .rail-head { height: 49px; padding: 0 18px; border-bottom: 1px solid var(--line); display: flex; align-items: center; justify-content: space-between; }
+    .rail-head strong { font-size: 12px; }
+    .rail-head span { color: var(--muted); font-size: 10px; }
+    .rail-scroll { overflow: auto; padding: 17px; }
+    .inspector-label { margin: 5px 0 9px; color: var(--muted); font-size: 9px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
+    .selected-card { padding: 13px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); }
+    .selected-card .path { color: var(--accent); font-size: 9px; font-weight: 700; }
+    .selected-card h3 { margin: 8px 0 6px; font-size: 13px; }
+    .selected-card p { margin: 0; color: var(--muted); font-size: 10px; line-height: 1.5; }
+    .messages-card {
+      width: 100%;
+      margin-top: 9px;
+      padding: 11px 12px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      display: grid;
+      grid-template-columns: 30px minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 9px;
+      color: var(--ink);
+      background: var(--panel);
+      text-align: left;
+      cursor: pointer;
+      transition: .18s ease;
+    }
+    .messages-card:hover { border-color: var(--accent); transform: translateY(-1px); box-shadow: 0 7px 18px rgba(45, 44, 39, .07); }
+    .messages-icon { width: 30px; height: 30px; border-radius: 8px; display: grid; place-items: center; color: var(--accent); background: var(--accent-soft); }
+    .messages-copy { min-width: 0; }
+    .messages-copy strong, .messages-copy span { display: block; }
+    .messages-copy strong { font-size: 11px; }
+    .messages-copy span { margin-top: 3px; color: var(--muted); font-size: 9px; }
+    .messages-arrow { color: var(--accent); }
+    .context-list { margin: 0; padding: 0; list-style: none; }
+    .context-item { position: relative; padding: 10px 8px 10px 24px; border-left: 1px solid var(--line); color: #555850; font-size: 11px; line-height: 1.4; }
+    .context-item::before { content: ""; position: absolute; left: -4px; top: 14px; width: 7px; height: 7px; border-radius: 50%; border: 1px solid var(--line); background: var(--panel); }
+    .context-item.current::before { background: var(--accent); border-color: var(--accent); }
+    .context-item small { display: block; margin-top: 3px; color: #aaa79f; font-size: 9px; }
+    .reference-card { margin-top: 8px; padding: 10px; border: 1px solid #d8d3ef; border-radius: 9px; background: var(--violet-soft); }
+    .reference-card strong { display: block; color: var(--violet); font-size: 11px; }
+    .reference-card span { display: block; margin-top: 4px; color: #716aa3; font-size: 9px; }
+    .ai-callout { margin-top: 18px; padding: 14px; border-radius: 11px; color: #f7f6f0; background: var(--ink); }
+    .ai-callout-head { display: flex; align-items: center; gap: 8px; font-size: 11px; font-weight: 750; }
+    .spark { color: var(--lime); }
+    .ai-callout p { margin: 9px 0 12px; color: #c8c8c1; font-size: 10px; line-height: 1.55; }
+    .ask-ai { width: 100%; height: 34px; border: 0; border-radius: 7px; color: var(--ink); background: var(--lime); font-weight: 760; font-size: 11px; cursor: pointer; }
+
+    .toast { position: fixed; left: 50%; bottom: 24px; z-index: 30; padding: 10px 14px; border-radius: 9px; color: white; background: var(--ink); box-shadow: var(--shadow); font-size: 11px; opacity: 0; pointer-events: none; transform: translate(-50%, 12px); transition: .25s ease; }
+    .toast.show { opacity: 1; transform: translate(-50%, 0); }
+    .mobile-tree-btn { display: none; }
+
+    /* Search and filter dialog */
+    .search-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 40;
+      display: none;
+      align-items: flex-start;
+      justify-content: center;
+      padding: 88px 18px 24px;
+      background: rgba(32, 34, 31, .34);
+      backdrop-filter: blur(5px);
+    }
+    .search-overlay.open { display: flex; animation: fade-in .16s ease-out; }
+    @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+    .search-dialog {
+      width: min(610px, 100%);
+      overflow: hidden;
+      border: 1px solid #cbc7bc;
+      border-radius: 15px;
+      background: var(--panel);
+      box-shadow: 0 24px 70px rgba(32, 34, 31, .23);
+    }
+    .search-dialog-head { padding: 15px 17px; border-bottom: 1px solid var(--line); display: flex; align-items: center; gap: 11px; }
+    .search-dialog-head .glass { color: var(--accent); font-size: 18px; }
+    .search-input { flex: 1; min-width: 0; border: 0; outline: 0; color: var(--ink); background: transparent; font-size: 16px; }
+    .search-input::placeholder { color: #aaa79f; }
+    .key-hint { padding: 3px 6px; border: 1px solid var(--line); border-radius: 5px; color: var(--muted); background: var(--paper); font-size: 9px; }
+    .filter-area { padding: 15px 17px 17px; }
+    .filter-title { margin-bottom: 10px; display: flex; align-items: center; justify-content: space-between; color: var(--muted); font-size: 9px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
+    .filter-title span:last-child { color: var(--accent); cursor: pointer; }
+    .filter-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; }
+    .filter-field { padding: 9px 10px; border: 1px solid var(--line); border-radius: 9px; background: #faf8f2; }
+    .filter-field label { display: block; margin-bottom: 6px; color: var(--muted); font-size: 9px; font-weight: 750; text-transform: uppercase; letter-spacing: .06em; }
+    .filter-field select { width: 100%; border: 0; outline: 0; color: var(--ink); background: transparent; font-size: 11px; }
+    .search-scope { margin-top: 12px; padding: 10px 11px; border-radius: 9px; display: flex; align-items: center; gap: 9px; color: #6158a3; background: var(--violet-soft); font-size: 10px; }
+    .search-scope strong { margin-left: 3px; }
+    .search-dialog-foot { padding: 11px 17px; border-top: 1px solid var(--line); display: flex; align-items: center; color: var(--muted); background: #faf9f4; font-size: 10px; }
+    .search-dialog-foot .primary-btn { margin-left: auto; height: 32px; }
+
+    @media (max-width: 1100px) {
+      :root { --context: 270px; --sidebar: 230px; }
+      .view-header, .canvas { padding-left: 20px; padding-right: 20px; }
+    }
+
+    @media (max-width: 850px) {
+      body { overflow: auto; }
+      .app { min-height: 100vh; height: auto; grid-template-columns: 1fr; grid-template-rows: 56px auto auto; }
+      .topbar { position: sticky; top: 0; grid-column: 1; grid-template-columns: 1fr auto; }
+      .brand { border-right: 0; }
+      .crumbs { display: none; }
+      .sidebar, .context-rail { display: none; }
+      main { min-height: calc(100vh - 56px); }
+      .view-header { align-items: flex-start; flex-direction: column; }
+      .view-switcher { width: 100%; }
+      .view-tab { flex: 1; min-width: 0; }
+      .board { grid-template-columns: 1fr; }
+      .cards { min-height: auto; }
+      .canvas { overflow: visible; }
+      .mobile-tree-btn { display: grid; }
+      .top-actions .ghost-btn { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header class="topbar">
+      <div class="brand"><span class="brand-mark">D</span> dryvre</div>
+      <div class="crumbs"><span>Product Studio</span><span class="crumb-sep">/</span><strong>Build Week Launch</strong></div>
+      <div class="top-actions">
+        <button class="icon-btn mobile-tree-btn" aria-label="트리 열기">☰</button>
+        <div class="avatar" title="데모 사용자">SO</div>
+      </div>
+    </header>
+
+    <aside class="sidebar">
+      <div class="side-tools">
+        <button class="search" id="open-search" aria-label="검색 및 필터 열기">⌕ <span>Search &amp; filter</span></button>
+        <button class="icon-btn" data-toast="새 블록을 만들 수 있습니다">＋</button>
+      </div>
+      <nav class="tree-wrap" aria-label="블록 트리">
+        <div class="section-label"><span>Tree</span><span>•••</span></div>
+        <button class="tree-row"><span class="chev">⌄</span><span class="node-icon">◈</span><span class="node-label">Product Studio</span></button>
+        <button class="tree-row level-1 active" data-node="Build Week Launch"><span class="chev">⌄</span><span class="node-icon">◫</span><span class="node-label">Build Week Launch</span><span class="count out-of-scope" title="MVP 제외: 읽지 않은 항목 롤업">3</span></button>
+        <button class="tree-row level-2" data-node="Product thesis"><span class="chev"></span><span class="node-icon">¶</span><span class="node-label">Product thesis</span></button>
+        <button class="tree-row level-2" data-node="Core experience"><span class="chev">⌄</span><span class="node-icon">◎</span><span class="node-label">Core experience</span></button>
+        <button class="tree-row level-2" data-node="Launch checklist"><span class="chev"></span><span class="node-icon">☑</span><span class="node-label">Launch checklist</span><span class="count out-of-scope" title="MVP 제외: 읽지 않은 항목 롤업">2</span></button>
+        <button class="tree-row level-1" data-node="User research"><span class="chev">›</span><span class="node-icon">◌</span><span class="node-label">User research</span></button>
+        <button class="tree-row level-1" data-node="Design system"><span class="chev">›</span><span class="node-icon">◐</span><span class="node-label">Design system</span></button>
+        <button class="tree-row level-1" data-node="Decision log"><span class="chev"></span><span class="node-icon">↳</span><span class="node-label">Decision log</span></button>
+        <div class="out-of-scope" style="margin-top:14px;border-radius:9px" title="MVP 제외: 핀과 구독">
+          <div class="section-label"><span>Pinned</span><span>＋</span></div>
+          <button class="tree-row" data-node="OpenAI Build Week"><span class="chev"></span><span class="node-icon">★</span><span class="node-label">OpenAI Build Week</span></button>
+          <button class="tree-row" data-node="Weekly review"><span class="chev"></span><span class="node-icon">↗</span><span class="node-label">Weekly review</span></button>
+        </div>
+      </nav>
+      <div class="side-footer"><div class="sync-status out-of-scope" title="MVP 제외: 실시간 다중 사용자 동기화"><span class="sync-dot"></span>All blocks synced</div></div>
+    </aside>
+
+    <main>
+      <section class="view-header">
+        <div>
+          <div class="title-line"><h1>Build Week Launch</h1></div>
+          <p class="subtitle">One tree for the thinking, the work, and the conversation.</p>
+        </div>
+        <div class="view-switcher" role="tablist">
+          <button class="view-tab active" data-view="document">▤&nbsp; Document</button>
+          <button class="view-tab" data-view="board">▦&nbsp; Board</button>
+          <button class="view-tab" data-view="stream">◉&nbsp; Stream</button>
+        </div>
+      </section>
+
+      <div class="canvas">
+        <section class="view active" id="document-view">
+          <article class="doc-sheet">
+            <div class="doc-kicker">Product brief · Updated 2m ago</div>
+            <div class="doc-block"><span class="drag-handle">⠿</span><h2 class="doc-h2">A calmer place to move work forward.</h2></div>
+            <div class="doc-block"><span class="drag-handle">⠿</span><p class="doc-p">Dryvre keeps documents, tasks, and conversations in one shared tree. Nothing needs to be copied, converted, or synced—each view is simply another way to see the same blocks.</p></div>
+            <div class="doc-block"><span class="drag-handle">⠿</span><p class="doc-p">Launch criteria are informed by <span class="ref-chip">↗ OpenAI Build Week</span> and our latest <span class="ref-chip">↗ User research</span>.</p></div>
+            <div class="doc-block"><span class="drag-handle">⠿</span><h3 class="doc-h3">Core experience</h3></div>
+            <div class="doc-children">
+              <div class="doc-block selected" data-select="Three views, one tree"><span class="drag-handle">⠿</span><div class="task-line"><span class="check"></span><span>Three views, one tree</span><span class="status-chip progress">● In progress</span></div></div>
+              <div class="doc-children">
+                <div class="doc-block"><span class="drag-handle">⠿</span><p class="doc-p">Document for knowledge, board for execution, stream for discussion. Switching views never changes the underlying structure.</p></div>
+                <div class="doc-block"><span class="drag-handle">⠿</span><div class="task-line"><span class="check done">✓</span><span class="done-copy">Document tree renderer</span><span class="status-chip done">Done</span></div></div>
+                <div class="doc-block"><span class="drag-handle">⠿</span><div class="task-line"><span class="check"></span><span>Board status interactions</span><span class="status-chip todo">To do</span></div></div>
+              </div>
+              <div class="doc-block"><span class="drag-handle">⠿</span><div class="task-line"><span class="check"></span><span>AI writes back into the tree</span><span class="status-chip progress">● In progress</span></div></div>
+              <div class="doc-children">
+                <div class="doc-block"><span class="drag-handle">⠿</span><p class="doc-p">Mentioning an agent automatically gathers this subtree and explicit references. Its answer arrives as editable child blocks, not a sealed chat response.</p></div>
+              </div>
+            </div>
+            <div class="doc-block"><span class="drag-handle">⠿</span><h3 class="doc-h3">Launch checklist</h3></div>
+            <div class="doc-children">
+              <div class="doc-block"><span class="drag-handle">⠿</span><div class="task-line"><span class="check done">✓</span><span class="done-copy">Seed demo workspace</span><span class="status-chip done">Done</span></div></div>
+              <div class="doc-block"><span class="drag-handle">⠿</span><div class="task-line"><span class="check"></span><span>Record the three-minute product story</span><span class="status-chip todo">To do</span></div></div>
+            </div>
+          </article>
+        </section>
+
+        <section class="view" id="board-view">
+          <div class="board">
+            <section class="column">
+              <header class="column-head"><span class="column-dot"></span>To do <span class="column-count">2</span></header>
+              <div class="cards">
+                <article class="card" data-select="Board status interactions"><div class="card-meta"><span class="card-path">Core experience</span><span class="card-id">#B-14</span></div><h3>Board status interactions</h3><p>Move a block between states without creating a separate task record.</p><div class="card-footer"><span class="mini-avatar">SO</span><span class="comment-count">◉ 2</span></div></article>
+                <article class="card" data-select="Record the three-minute product story"><div class="card-meta"><span class="card-path">Launch checklist</span><span class="card-id">#B-21</span></div><h3>Record the three-minute product story</h3><p>Show one idea moving naturally across all three views.</p><div class="card-footer"><span class="mini-avatar" style="background:var(--violet-soft);color:var(--violet)">MK</span><span class="comment-count">◉ 1</span></div></article>
+                <button class="add-card" data-toast="이 열에 새 태스크 블록을 추가합니다">＋ Add block</button>
+              </div>
+            </section>
+            <section class="column">
+              <header class="column-head"><span class="column-dot"></span>In progress <span class="column-count">2</span></header>
+              <div class="cards">
+                <article class="card selected" data-select="Three views, one tree"><div class="card-meta"><span class="card-path">Core experience</span><span class="card-id">#B-12</span></div><h3>Three views, one tree</h3><p>Render identical blocks as a document, board, and conversation stream.</p><div class="card-footer"><span class="mini-avatar">SO</span><span class="comment-count">◉ 3</span></div></article>
+                <article class="card" data-select="AI writes back into the tree"><div class="card-meta"><span class="card-path">Core experience</span><span class="card-id">#B-18</span></div><h3>AI writes back into the tree</h3><p>Use subtree and references as automatic, visible context.</p><div class="card-footer"><span class="mini-avatar" style="background:var(--ink);color:white">AI</span><span class="comment-count">◉ 4</span></div></article>
+                <button class="add-card" data-toast="이 열에 새 태스크 블록을 추가합니다">＋ Add block</button>
+              </div>
+            </section>
+            <section class="column">
+              <header class="column-head"><span class="column-dot"></span>Done <span class="column-count">2</span></header>
+              <div class="cards">
+                <article class="card" data-select="Document tree renderer"><div class="card-meta"><span class="card-path">Core experience</span><span class="card-id">#B-13</span></div><h3>Document tree renderer</h3><p>Nested blocks render as a calm, readable living document.</p><div class="card-footer"><span class="mini-avatar">SO</span><span class="comment-count">◉ 1</span></div></article>
+                <article class="card" data-select="Seed demo workspace"><div class="card-meta"><span class="card-path">Launch checklist</span><span class="card-id">#B-20</span></div><h3>Seed demo workspace</h3><p>A coherent product story, ready when the app opens.</p><div class="card-footer"><span class="mini-avatar" style="background:var(--violet-soft);color:var(--violet)">MK</span><span class="comment-count">◉ 0</span></div></article>
+                <button class="add-card" data-toast="이 열에 새 태스크 블록을 추가합니다">＋ Add block</button>
+              </div>
+            </section>
+          </div>
+        </section>
+
+        <section class="view" id="stream-view">
+          <div class="stream-layout">
+            <div class="stream-focus"><div class="focus-glyph">◎</div><div class="focus-copy"><span>Conversation attached to</span><strong>Core experience / Three views, one tree</strong></div><button class="tool-pill" data-switch="document">Open block ↗</button></div>
+            <article class="message"><div class="avatar">SO</div><div><div class="message-head"><strong>Soonoh</strong><span>Today, 14:22</span></div><div class="message-body"><p>The demo should make the ontology obvious without explaining our database. Can we use one launch brief and watch it become work?</p></div><div class="message-actions">Reply · Reference · •••</div></div></article>
+            <article class="message"><div class="avatar" style="background:var(--violet-soft);color:var(--violet)">MK</div><div><div class="message-head"><strong>Mina Kim</strong><span>14:28</span></div><div class="message-body"><p>Yes. Keep the selected block fixed while switching views. That makes “same object, different lens” immediately visible.</p></div><div class="message-actions">Reply · Reference · •••</div></div></article>
+            <article class="message agent"><div class="avatar">✦</div><div><div class="message-head"><strong>Dryvre AI</strong><span>14:31 · GPT-5.6</span></div><div class="message-body"><p>I read this subtree and the referenced Build Week criteria. Here is a concise demo sequence written back as child blocks:</p><div class="agent-output"><div class="agent-block">Open in Document and establish the product thesis.</div><div class="agent-block">Switch to Board; move “Three views, one tree” to Done.</div><div class="agent-block">Return here and ask AI to create the launch checklist.</div></div></div><div class="message-actions">3 blocks created · <span class="out-of-scope" style="display:inline-block;padding:1px 3px" title="MVP 제외: op_log 기반 실행 취소">Undo</span> · •••</div></div></article>
+            <div class="composer">
+              <textarea id="composer" placeholder="Write to this block…  Use @ to mention people, agents, or blocks"></textarea>
+              <div class="composer-actions"><span class="context-chip">◎ Three views, one tree</span><button class="tool-pill" data-toast="블록 또는 사람을 참조할 수 있습니다">@ Reference</button><button class="send-btn" id="send-message" aria-label="메시지 보내기">↑</button></div>
+            </div>
+          </div>
+        </section>
+      </div>
+    </main>
+
+    <aside class="context-rail">
+      <header class="rail-head"><strong>Block context</strong><span>Auto-built</span></header>
+      <div class="rail-scroll">
+        <div class="inspector-label">Selected block</div>
+        <div class="selected-card"><span class="path">Build Week Launch / Core experience</span><h3 id="selected-title">Three views, one tree</h3><p id="selected-description">This block stays selected across every view. Its identity, children, references, and conversation travel with it.</p></div>
+        <button class="messages-card" data-switch="stream" aria-label="스트림에서 메시지 3개 보기">
+          <span class="messages-icon">◉</span>
+          <span class="messages-copy"><strong>3 messages</strong><span>Soonoh, Mina, and Dryvre AI</span></span>
+          <span class="messages-arrow">→</span>
+        </button>
+
+        <div class="inspector-label" style="margin-top:20px">AI reads</div>
+        <ul class="context-list">
+          <li class="context-item">Build Week Launch<small>root · 12 descendant blocks</small></li>
+          <li class="context-item">Core experience<small>parent block</small></li>
+          <li class="context-item current">Three views, one tree<small>current block · 3 children</small></li>
+        </ul>
+
+        <div class="inspector-label" style="margin-top:18px">References</div>
+        <div class="reference-card"><strong>↗ OpenAI Build Week</strong><span>Judging criteria · submission requirements</span></div>
+        <div class="reference-card"><strong>↗ User research</strong><span>4 interviews · synthesized yesterday</span></div>
+
+        <div class="ai-callout"><div class="ai-callout-head"><span class="spark">✦</span>Dryvre AI is in the tree</div><p>No context settings. The selected subtree and its references are the prompt boundary.</p><button class="ask-ai" data-switch="stream">Ask in this block →</button></div>
+      </div>
+    </aside>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <div class="search-overlay" id="search-overlay" role="dialog" aria-modal="true" aria-labelledby="search-title">
+    <section class="search-dialog">
+      <header class="search-dialog-head">
+        <span class="glass">⌕</span>
+        <input class="search-input" id="search-input" aria-labelledby="search-title" placeholder="Search blocks in this tree…" />
+        <span class="key-hint">ESC</span>
+      </header>
+      <div class="filter-area">
+        <div class="filter-title"><span id="search-title">Filter conditions</span><span id="clear-filters">Clear all</span></div>
+        <div class="filter-grid">
+          <div class="filter-field"><label for="filter-ref">References</label><select id="filter-ref"><option>Any reference</option><option>OpenAI Build Week</option><option>User research</option><option>No references</option></select></div>
+          <div class="filter-field"><label for="filter-status">Status</label><select id="filter-status"><option>Any status</option><option>To do</option><option>In progress</option><option>Done</option><option>Not a task</option></select></div>
+          <div class="filter-field"><label for="filter-author">Author</label><select id="filter-author"><option>Anyone</option><option>Soonoh</option><option>Mina Kim</option><option>Dryvre AI</option></select></div>
+          <div class="filter-field"><label for="filter-date">Updated</label><select id="filter-date"><option>Any time</option><option>Today</option><option>Past 7 days</option><option>Past 30 days</option></select></div>
+        </div>
+        <div class="search-scope">◎ Searching within <strong>Product Studio / Build Week Launch</strong></div>
+      </div>
+      <footer class="search-dialog-foot"><span>Results keep their tree structure and remain editable.</span><button class="primary-btn" id="apply-search">Apply to tree</button></footer>
+    </section>
+  </div>
+
+  <script>
+    const tabs = [...document.querySelectorAll('.view-tab')];
+    const views = [...document.querySelectorAll('.view')];
+    const descriptions = {
+      'Three views, one tree': 'This block stays selected across every view. Its identity, children, references, and conversation travel with it.',
+      'Board status interactions': 'Status is only a property on a block. The board is a filtered projection of the same tree.',
+      'Record the three-minute product story': 'A launch task nested under the checklist, visible in both the document and board.',
+      'AI writes back into the tree': 'The agent reads visible context and returns editable blocks directly beneath this one.',
+      'Document tree renderer': 'Nested canonical blocks rendered recursively as a readable document.',
+      'Seed demo workspace': 'A pre-filled workspace that reveals the product model in under a minute.'
+    };
+
+    function switchView(name) {
+      tabs.forEach(tab => tab.classList.toggle('active', tab.dataset.view === name));
+      views.forEach(view => view.classList.toggle('active', view.id === `${name}-view`));
+    }
+
+    tabs.forEach(tab => tab.addEventListener('click', () => switchView(tab.dataset.view)));
+    document.querySelectorAll('[data-switch]').forEach(el => el.addEventListener('click', () => switchView(el.dataset.switch)));
+
+    function selectBlock(name, element) {
+      document.getElementById('selected-title').textContent = name;
+      document.getElementById('selected-description').textContent = descriptions[name] || 'A first-class block in the shared workspace tree.';
+      document.querySelectorAll('.card.selected, .doc-block.selected').forEach(el => el.classList.remove('selected'));
+      if (element) element.classList.add('selected');
+    }
+
+    document.querySelectorAll('[data-select]').forEach(el => el.addEventListener('click', () => selectBlock(el.dataset.select, el)));
+    document.querySelectorAll('.tree-row[data-node]').forEach(row => row.addEventListener('click', () => {
+      document.querySelectorAll('.tree-row').forEach(el => el.classList.remove('active'));
+      row.classList.add('active');
+      showToast(`${row.dataset.node} 블록을 선택했습니다`);
+    }));
+
+    document.querySelectorAll('.check').forEach(box => box.addEventListener('click', event => {
+      event.stopPropagation();
+      box.classList.toggle('done');
+      box.textContent = box.classList.contains('done') ? '✓' : '';
+      const copy = box.nextElementSibling;
+      if (copy) copy.classList.toggle('done-copy', box.classList.contains('done'));
+      showToast('같은 블록의 상태가 모든 뷰에 반영됩니다');
+    }));
+
+    const toast = document.getElementById('toast');
+    let toastTimer;
+    function showToast(message) {
+      toast.textContent = message;
+      toast.classList.add('show');
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => toast.classList.remove('show'), 2100);
+    }
+    document.querySelectorAll('[data-toast]').forEach(el => el.addEventListener('click', () => showToast(el.dataset.toast)));
+
+    const composer = document.getElementById('composer');
+    document.getElementById('send-message').addEventListener('click', () => {
+      const text = composer.value.trim();
+      if (!text) return showToast('메시지를 입력해 주세요');
+      const article = document.createElement('article');
+      article.className = 'message';
+      article.innerHTML = `<div class="avatar">SO</div><div><div class="message-head"><strong>Soonoh</strong><span>Just now</span></div><div class="message-body"><p></p></div><div class="message-actions">Reply · Reference · •••</div></div>`;
+      article.querySelector('p').textContent = text;
+      document.querySelector('.composer').before(article);
+      composer.value = '';
+      showToast('메시지가 자식 블록으로 추가됐습니다');
+    });
+    composer.addEventListener('keydown', event => {
+      if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) document.getElementById('send-message').click();
+    });
+
+    const searchOverlay = document.getElementById('search-overlay');
+    const searchInput = document.getElementById('search-input');
+    function closeSearch() { searchOverlay.classList.remove('open'); }
+    document.getElementById('open-search').addEventListener('click', () => {
+      searchOverlay.classList.add('open');
+      setTimeout(() => searchInput.focus(), 0);
+    });
+    searchOverlay.addEventListener('click', event => { if (event.target === searchOverlay) closeSearch(); });
+    document.addEventListener('keydown', event => { if (event.key === 'Escape') closeSearch(); });
+    document.getElementById('clear-filters').addEventListener('click', () => {
+      searchInput.value = '';
+      document.querySelectorAll('.filter-field select').forEach(select => select.selectedIndex = 0);
+      searchInput.focus();
+    });
+    document.getElementById('apply-search').addEventListener('click', () => {
+      closeSearch();
+      showToast('검색 조건을 현재 트리에 적용했습니다');
+    });
+  </script>
+</body>
+</html>

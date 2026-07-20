@@ -1,0 +1,94 @@
+# Dryvre
+
+Dryvre is a single tree of first-class Markdown blocks, rendered as a document, task board, or conversation stream. References serve as links, tags, and AI context at once.
+
+## Documentation
+
+- [Documentation index](docs/README.md)
+- [Product principles](docs/product-principles.md)
+- [UI rules](docs/ui-rules.md)
+- [Block editor specification](docs/editor-spec.md)
+- [Architecture](docs/architecture.md)
+- [Hackathon MVP scope](docs/hackathon-scope.md)
+- [OpenAI Build Week guide](docs/build-week.md)
+
+## Stack
+
+- TypeScript workspaces shared by the React client, Fastify server, database, and MCP server
+- Vite + React SPA with a minimal Markdown editor
+- Fastify REST API + one WebSocket connection
+- PostgreSQL + Drizzle; no Redis, search service, queue, or CRDT
+- OpenAI Responses API directly; model output is persisted as a block
+- One application container plus PostgreSQL
+
+## Run locally
+
+Requirements: Node.js 22+, npm 10+, Docker.
+
+```bash
+cp .env.example .env
+docker compose up -d postgres
+npm install
+npm run db:migrate
+npm run dev
+```
+
+Open <http://localhost:5173>. Development uses the seeded `builder` identity; production requires a valid database-backed session cookie.
+
+To run the production-shaped stack instead, use `docker compose up --build`; the one-shot `migrate` service applies migrations before the app starts at <http://localhost:3000>.
+
+Configure `OPENAI_API_KEY` to enable the AI composer. `OPENAI_MODEL` defaults to `gpt-5.6` and can be changed without code changes.
+
+## Commands
+
+```bash
+npm run dev          # Fastify and Vite with reload
+npm run typecheck    # all workspace type checks
+npm test             # shared contract tests
+npm run lint
+npm run build        # production server, SPA, and MCP artifacts
+npm start            # serve API + built SPA on port 3000
+```
+
+## Architecture
+
+```text
+apps/web  ── HTTP + WebSocket ──> apps/server ──> PostgreSQL
+                                       │
+apps/mcp ───────── HTTP ────────────────┤
+                                       └──> OpenAI Responses API
+
+packages/shared  block/op contracts used by every TypeScript surface
+packages/db      Drizzle schema and migrations
+```
+
+The mutation protocol intentionally has only seven operations: `create`, `move`, `edit`, `setStatus`, `ref`, `unref`, and `delete`. Every accepted operation and state change share a transaction, and clients use block versions for optimistic conflict detection.
+
+## MCP
+
+Build and point an MCP client at the stdio entry:
+
+```json
+{
+  "mcpServers": {
+    "dryvre": {
+      "command": "node",
+      "args": ["/absolute/path/to/dryvre/dist/mcp/index.js"],
+      "env": { "DRYVRE_URL": "http://localhost:3000" }
+    }
+  }
+}
+```
+
+Set `DRYVRE_SESSION` to a session-cookie value outside development.
+
+## Production notes
+
+- Set a random `SESSION_SECRET` of at least 32 characters.
+- Run `npm run db:migrate` before starting a newly deployed version.
+- Run one application process initially. PostgreSQL `NOTIFY` is emitted for each committed op, leaving a direct path to multi-process fan-out later.
+- Replace the seeded development identity and add a sign-in route before exposing the app publicly.
+
+## License
+
+MIT
