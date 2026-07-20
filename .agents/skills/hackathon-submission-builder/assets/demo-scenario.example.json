@@ -1,0 +1,19 @@
+{
+  "name": "Example hackathon demo",
+  "startPath": "/",
+  "viewport": {"width": 1440, "height": 900},
+  "defaultPauseMs": 500,
+  "steps": [
+    {
+      "action": "waitFor",
+      "selector": "body",
+      "subtitle": "This demo uses deterministic local fixture data."
+    },
+    {
+      "action": "screenshot",
+      "name": "opening",
+      "subtitle": "The product is ready for a repeatable judging walkthrough."
+    },
+    {"action": "wait", "durationMs": 1800}
+  ]
+}

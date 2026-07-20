@@ -1,0 +1,4 @@
+interface:
+  display_name: "Hackathon Submission Builder"
+  short_description: "Build, record, validate, and package hackathon submissions"
+  default_prompt: "Use $hackathon-submission-builder to create every required hackathon deliverable and package them into one output directory."
