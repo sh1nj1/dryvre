@@ -8,6 +8,7 @@ Dryvre의 장기 제품 원칙과 해커톤 제출 범위를 분리해 관리한
 - [UI 규칙](ui-rules.md): 레이아웃과 상호작용에 관한 확정 결정
 - [블록 편집기 스펙](editor-spec.md): Markdown 편집, 키보드, 저장과 충돌 계약
 - [기술 아키텍처](architecture.md): 데이터 모델, 연산 프로토콜, 동기화와 기술 선택
+- [개발 DB와 E2E](development-database.md): 로컬 PostgreSQL 초기화, 자동 Testcontainers 모드, CI 테스트
 - [해커톤 MVP 범위](hackathon-scope.md): 구현 목표, 데모 흐름, 비범위와 제출 체크리스트
 - [OpenAI Build Week](build-week.md): 일정, 트랙, 심사 기준, 제출 요건과 공식 자료
 
