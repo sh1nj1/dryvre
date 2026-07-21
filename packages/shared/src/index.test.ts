@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { blockOpSchema, compileSkills, deriveBlockKind, parseAgentDefinition, parseBlockDirective, parseCodexJsonl, sortBlocksInDocumentOrder, wsServerMessageSchema, type Block } from './index.js';
+import { blockOpSchema, compileSkills, deriveBlockKind, parseAgentDefinition, parseAgentTriggers, parseBlockDirective, parseCodexJsonl, sortBlocksInDocumentOrder, wsServerMessageSchema, type Block } from './index.js';
 
 const baseBlock = (overrides: Partial<Block>): Block => ({
   id: crypto.randomUUID(),
@@ -66,6 +66,34 @@ describe("agent and skill contracts", () => {
       slug: "engineer",
       config: { workspace: "dryvre" },
     });
+  });
+
+  it("parses declarative Agent event triggers without adding them to instructions", () => {
+    const agent = baseBlock({
+      bodyMd: "# @agent developer-agent\nValidate before executing.",
+      path: "/agent/",
+    });
+    const config = baseBlock({
+      parentId: agent.id,
+      path: "/agent/config/",
+      bodyMd: '```agent-config\n{"workspace":"dryvre"}\n```',
+    });
+    const trigger = baseBlock({
+      parentId: agent.id,
+      path: "/agent/trigger/",
+      bodyMd: '```agent-trigger\n{"event":"status_changed","toStatus":"todo","mention":"Developer Agent","workflow":"task_loop","actorKind":"human"}\n```',
+    });
+    expect(parseAgentTriggers(agent, [config, trigger])).toEqual([{
+      blockId: trigger.id,
+      trigger: {
+        event: "status_changed",
+        toStatus: "todo",
+        mention: "Developer Agent",
+        workflow: "task_loop",
+        actorKind: "human",
+      },
+    }]);
+    expect(parseAgentDefinition(agent, [config, trigger]).instructions).toBe("Validate before executing.");
   });
 
   it("compiles nested Skill blocks without folding child Skill prose into the parent", () => {

@@ -25,4 +25,6 @@ jobs:
         run: npx playwright install --with-deps chromium
       - name: Browser UI E2E
         run: npm run test:e2e:web
+      - name: Full Agent demo browser E2E
+        run: npm run test:e2e:demo
       - run: npm run build

@@ -117,7 +117,15 @@ npx playwright install chromium # first run only
 npm run test:e2e:web
 ```
 
+Run the complete seeded PM → Inbox → Developer scenario against a real server, ephemeral PostgreSQL, WebSocket, and Chromium:
+
+```bash
+npm run test:e2e:demo
+```
+
 The UI suite starts the Vite application with its deterministic mock data and verifies the document editor, view navigation, and responsive interactions in Chromium. Tests live under `tests/ui` and use `playwright.config.ts`.
+
+The demo suite uses dedicated ports, starts the full development stack in `DRYVRE_AGENT_FAKE=true` mode, and validates the canonical task ID, Inbox reference, state transitions, result, and verification evidence. It lives under `tests/demo` and uses `playwright.demo.config.ts`.
 
 The E2E harness creates a fresh `postgres:17-alpine` container, applies the production Drizzle migrations, starts a real Fastify HTTP/WebSocket server on a random local port, runs the tests, and removes the container. It currently covers:
 
