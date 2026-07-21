@@ -58,37 +58,34 @@ def sha256(path: Path) -> str:
 
 
 def scan_text_stream(stream, location: str, errors: list[str], warnings: list[str]) -> None:
-    decoder = codecs.getincrementaldecoder("utf-8")()
-    tail = ""
+    decoders = [
+        codecs.getincrementaldecoder(encoding)(errors="replace")
+        for encoding in ("utf-8", "utf-16-le", "utf-16-be")
+    ]
+    tails = ["" for _ in decoders]
     credential_found = False
     blocker_found = False
     database_dump_found = False
-    while chunk := stream.read(1024 * 1024):
-        try:
-            text = decoder.decode(chunk)
-        except UnicodeDecodeError:
-            return
-        searchable = tail + text
-        if not credential_found and SECRET_TEXT.search(searchable):
+
+    def inspect(text: str) -> None:
+        nonlocal credential_found, blocker_found, database_dump_found
+        if not credential_found and SECRET_TEXT.search(text):
             errors.append(f"possible credential in: {location}")
             credential_found = True
-        if not blocker_found and "TODO-BLOCKED:" in searchable:
+        if not blocker_found and "TODO-BLOCKED:" in text:
             warnings.append(f"unresolved blocker in: {location}")
             blocker_found = True
-        if not database_dump_found and DATABASE_DUMP_TEXT.search(searchable):
+        if not database_dump_found and DATABASE_DUMP_TEXT.search(text):
             errors.append(f"database dump content in: {location}")
             database_dump_found = True
-        tail = searchable[-4096:]
-    try:
-        final = tail + decoder.decode(b"", final=True)
-    except UnicodeDecodeError:
-        return
-    if not credential_found and SECRET_TEXT.search(final):
-        errors.append(f"possible credential in: {location}")
-    if not blocker_found and "TODO-BLOCKED:" in final:
-        warnings.append(f"unresolved blocker in: {location}")
-    if not database_dump_found and DATABASE_DUMP_TEXT.search(final):
-        errors.append(f"database dump content in: {location}")
+
+    while chunk := stream.read(1024 * 1024):
+        for index, decoder in enumerate(decoders):
+            searchable = tails[index] + decoder.decode(chunk)
+            inspect(searchable)
+            tails[index] = searchable[-4096:]
+    for index, decoder in enumerate(decoders):
+        inspect(tails[index] + decoder.decode(b"", final=True))
 
 
 def has_srt_text(text: str) -> bool:
@@ -359,7 +356,7 @@ def main() -> int:
         if path.is_file() and path.relative_to(root).as_posix() not in declared
     )
     if extras:
-        warnings.append("undeclared files: " + ", ".join(extras))
+        errors.append("undeclared files: " + ", ".join(extras))
 
     result = {"valid": not errors, "errors": errors, "warnings": warnings, "filesChecked": len(declared)}
     print(json.dumps(result, indent=2, ensure_ascii=False))
