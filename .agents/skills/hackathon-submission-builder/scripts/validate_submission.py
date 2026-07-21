@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import codecs
 import hashlib
 import json
 import re
@@ -21,6 +22,10 @@ SECRET_TEXT = re.compile(
     r"(?:OPENAI|ANTHROPIC|AWS_SECRET_ACCESS|GITHUB|GH|STRIPE)_[A-Z0-9_]*\s*[=:]\s*['\"]?[A-Za-z0-9_\-/+=]{16,})",
     re.I,
 )
+SRT_TIMING = re.compile(
+    r"\d{2}:\d{2}:\d{2},\d{3}\s+-->\s+\d{2}:\d{2}:\d{2},\d{3}(?:\s+.*)?"
+)
+BINARY_SUFFIXES = {".png", ".jpg", ".jpeg", ".gif", ".pdf", ".mp4", ".webm", ".zip"}
 
 
 def sha256(path: Path) -> str:
@@ -29,6 +34,51 @@ def sha256(path: Path) -> str:
         for chunk in iter(lambda: stream.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def scan_text_stream(stream, location: str, errors: list[str], warnings: list[str]) -> None:
+    decoder = codecs.getincrementaldecoder("utf-8")()
+    tail = ""
+    credential_found = False
+    blocker_found = False
+    while chunk := stream.read(1024 * 1024):
+        try:
+            text = decoder.decode(chunk)
+        except UnicodeDecodeError:
+            return
+        searchable = tail + text
+        if not credential_found and SECRET_TEXT.search(searchable):
+            errors.append(f"possible credential in: {location}")
+            credential_found = True
+        if not blocker_found and "TODO-BLOCKED:" in searchable:
+            warnings.append(f"unresolved blocker in: {location}")
+            blocker_found = True
+        tail = searchable[-4096:]
+    try:
+        final = tail + decoder.decode(b"", final=True)
+    except UnicodeDecodeError:
+        return
+    if not credential_found and SECRET_TEXT.search(final):
+        errors.append(f"possible credential in: {location}")
+    if not blocker_found and "TODO-BLOCKED:" in final:
+        warnings.append(f"unresolved blocker in: {location}")
+
+
+def has_srt_cue(path: Path) -> bool:
+    try:
+        text = path.read_text(encoding="utf-8")
+    except UnicodeDecodeError:
+        return False
+    for block in re.split(r"\r?\n\s*\r?\n", text.strip()):
+        lines = block.splitlines()
+        if (
+            len(lines) >= 3
+            and lines[0].strip().isdigit()
+            and SRT_TIMING.fullmatch(lines[1].strip())
+            and any(line.strip() for line in lines[2:])
+        ):
+            return True
+    return False
 
 
 def inspect_zip(path: Path, relative: str, errors: list[str], warnings: list[str]) -> None:
@@ -54,17 +104,9 @@ def inspect_zip(path: Path, relative: str, errors: list[str], warnings: list[str
                 if member.flag_bits & 0x1:
                     errors.append(f"encrypted archive member cannot be inspected: {location}")
                     continue
-                if member.file_size <= 2_000_000 and suffix not in {
-                    ".png", ".jpg", ".jpeg", ".gif", ".pdf", ".mp4", ".webm",
-                }:
-                    try:
-                        text = archive.read(member).decode("utf-8")
-                    except UnicodeDecodeError:
-                        continue
-                    if SECRET_TEXT.search(text):
-                        errors.append(f"possible credential in archive: {location}")
-                    if "TODO-BLOCKED:" in text:
-                        warnings.append(f"unresolved blocker in archive: {location}")
+                if suffix not in BINARY_SUFFIXES:
+                    with archive.open(member) as stream:
+                        scan_text_stream(stream, location, errors, warnings)
     except (zipfile.BadZipFile, zipfile.LargeZipFile):
         errors.append(f"unreadable zip archive: {relative}")
 
@@ -117,15 +159,9 @@ def main() -> int:
             errors.append(f"secret-like file path: {relative}")
         if path.suffix.lower() == ".zip":
             inspect_zip(path, relative, errors, warnings)
-        if path.stat().st_size <= 2_000_000 and path.suffix.lower() not in {".png", ".jpg", ".jpeg", ".gif", ".pdf", ".mp4", ".webm", ".zip"}:
-            try:
-                text = path.read_text(encoding="utf-8")
-                if SECRET_TEXT.search(text):
-                    errors.append(f"possible credential in: {relative}")
-                if "TODO-BLOCKED:" in text:
-                    warnings.append(f"unresolved blocker in: {relative}")
-            except UnicodeDecodeError:
-                pass
+        if path.suffix.lower() not in BINARY_SUFFIXES:
+            with path.open("rb") as stream:
+                scan_text_stream(stream, relative, errors, warnings)
         if path.suffix.lower() == ".mp4":
             video_count += 1
             if not shutil.which("ffprobe"):
@@ -144,10 +180,13 @@ def main() -> int:
                 if args.max_video_seconds and duration > args.max_video_seconds:
                     errors.append(f"video exceeds {args.max_video_seconds}s ({duration:.2f}s): {relative}")
         elif path.suffix.lower() == ".srt":
-            caption_count += 1
+            if has_srt_cue(path):
+                caption_count += 1
+            else:
+                errors.append(f"empty or malformed SRT captions: {relative}")
 
     if video_count and not caption_count:
-        errors.append("video is present but no SRT caption file was packaged")
+        errors.append("video is present but no valid SRT caption file was packaged")
 
     for fixed in ("manifest.json", "submission-status.md"):
         declared.add(fixed)
