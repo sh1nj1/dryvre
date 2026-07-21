@@ -51,7 +51,7 @@ Agent는 본문 첫 줄이 다음 형식인 일반 블록 하나다.
 ```
 ````
 
-MVP 설정 키는 `workspace`, `model`, `reasoningEffort` 세 개뿐이다. 임의 command, 환경 변수와 추가 CLI 인자는 받지 않는다. Agent 블록은 정본 정의이고, 연결된 `subject(kind=agent)`는 작성자 표시와 권한 판정을 위한 실행 identity일 뿐 별도 사용자 개념이 아니다.
+MVP 설정 키는 `workspace`, `model`, `reasoningEffort` 세 개뿐이다. 임의 command, 환경 변수와 추가 CLI 인자는 받지 않는다. Agent 블록은 정본 정의이고, 연결된 `subject(kind=agent)`는 작성자 표시와 실행 추적을 위한 identity일 뿐 별도 사용자 개념이 아니다.
 
 ### Skill 블록
 
