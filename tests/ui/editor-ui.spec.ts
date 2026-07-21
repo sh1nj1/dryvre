@@ -9,14 +9,35 @@ test('keeps view navigation in the topbar and removes redundant chrome', async (
   await expect(page.locator('.view-header')).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Create block' })).toHaveCount(0);
   await expect(page.locator('.section-label')).toHaveText('Tree');
+  await expect(page.locator('.stream-host-rail')).toBeVisible();
+  await expect(page.locator('.stream-host-rail')).toHaveAttribute('aria-label', 'Stream for Three views, one tree');
+  await expect(page.locator('.context-rail')).toHaveCount(0);
 
   await topbar.getByRole('tab', { name: /Stream/ }).click();
+  await expect(page.locator('.stream-host-main')).toBeVisible();
+  await expect(page.locator('.context-rail')).toBeVisible();
   await expect(page.locator('.stream-focus')).toHaveCount(0);
   await expect(page.locator('.message')).toHaveCount(3);
   await expect(page.locator('.context-chip')).toContainText('Three views, one tree');
+  await expect(page.locator('.composer-context > span:last-child')).toHaveText('3 blocks · 2 references');
 });
 
-test('keeps the newest stream message at the bottom after sending', async ({ page }) => {
+test('keeps the companion Stream bound to the selected Document or Board block', async ({ page }) => {
+  await page.goto('/app');
+
+  const companion = page.locator('.stream-host-rail');
+  await expect(companion.locator('.message')).toHaveCount(3);
+  await page.locator('.doc-block').filter({ hasText: 'Board status interactions' }).first().click();
+  await expect(companion).toHaveAttribute('aria-label', 'Stream for Board status interactions');
+  await expect(companion.locator('.message')).toHaveCount(0);
+
+  await page.getByRole('tab', { name: /Board/ }).click();
+  await page.locator('.card').filter({ hasText: 'Record the three-minute product story' }).click();
+  await expect(companion).toHaveAttribute('aria-label', 'Stream for Record the three-minute product story');
+  await expect(companion.locator('.message')).toHaveCount(3);
+});
+
+test('sends from the companion Stream without leaving Document and keeps the newest message at the bottom', async ({ page }) => {
   const rootId = '00000000-0000-4000-8000-000000000010';
   const olderId = 'ffffffff-ffff-4fff-8fff-ffffffffffff';
   const newerId = '00000000-0000-4000-8000-000000000001';
@@ -52,11 +73,13 @@ test('keeps the newest stream message at the bottom after sending', async ({ pag
   });
 
   await page.goto('/app');
-  await page.getByRole('tab', { name: /Stream/ }).click();
+  await expect(page.locator('.stream-host-rail')).toBeVisible();
   await expect(page.locator('.message')).toHaveCount(1);
   await page.getByPlaceholder('Write to this block').fill('Newest message');
   await page.getByRole('button', { name: 'Send message' }).click();
 
+  await expect(page.getByRole('tab', { name: /Document/ })).toHaveAttribute('aria-selected', 'true');
+  await expect(page.locator('.stream-host-rail')).toBeVisible();
   await expect(page.locator('.message')).toHaveCount(2);
   await expect(page.locator('.message').nth(0)).toContainText('Older message');
   await expect(page.locator('.message').nth(1)).toContainText('Newest message');
@@ -105,6 +128,7 @@ test('uses a compact view selector and tree drawer on mobile', async ({ page }) 
   await page.goto('/app');
 
   await expect(page.locator('.topbar .view-switcher')).toBeHidden();
+  await expect(page.locator('.stream-host-rail')).toBeHidden();
   const viewSelect = page.getByRole('combobox', { name: 'View mode' });
   await expect(viewSelect).toBeVisible();
   await viewSelect.selectOption('board');
@@ -243,7 +267,7 @@ test('recovers to Message mode when navigating from an agent to a non-target blo
     return route.fulfill({ status: 404, json: { error: 'Not found' } });
   });
 
-  await page.goto('/');
+  await page.goto('/app');
   await page.locator('.tree-row').filter({ hasText: 'Demo target' }).click();
   await page.getByRole('tab', { name: /Stream/ }).click();
   await page.getByLabel('Send as').selectOption(productId);
@@ -290,7 +314,7 @@ test('keeps observing an agent run after leaving the Stream view', async ({ page
     return route.fulfill({ status: 404, json: { error: 'Not found' } });
   });
 
-  await page.goto('/');
+  await page.goto('/app');
   await page.locator('.tree-row').filter({ hasText: 'Demo target' }).click();
   await page.getByRole('tab', { name: /Stream/ }).click();
   await page.getByLabel('Send as').selectOption(productId);
@@ -332,7 +356,7 @@ test('keeps message send and cancel available for an in-flight run off its targe
     return route.fulfill({ status: 404, json: { error: 'Not found' } });
   });
 
-  await page.goto('/');
+  await page.goto('/app');
   await page.locator('.tree-row').filter({ hasText: 'Demo target' }).click();
   await page.getByRole('tab', { name: /Stream/ }).click();
   await page.getByLabel('Send as').selectOption(productId);
@@ -384,7 +408,7 @@ test('keeps the mode picker selectable during an in-flight run on a valid target
     return route.fulfill({ status: 404, json: { error: 'Not found' } });
   });
 
-  await page.goto('/');
+  await page.goto('/app');
   await page.locator('.tree-row').filter({ hasText: 'Demo target' }).click();
   await page.getByRole('tab', { name: /Stream/ }).click();
   await page.getByLabel('Send as').selectOption(productId);
