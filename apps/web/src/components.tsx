@@ -56,7 +56,7 @@ export function Sidebar({ blocks, rootId, selectedId, visibleIds, mobileOpen, on
   return <>
     <div className={`mobile-backdrop ${mobileOpen ? 'show' : ''}`} onClick={onClose} />
     <aside className={`sidebar ${mobileOpen ? 'mobile-open' : ''}`}>
-      <div className="side-tools"><button className="search-trigger" onClick={onOpenSearch}><span>⌕</span><span>Search &amp; filter</span><kbd>⌘K</kbd></button><button className="icon-btn" aria-label="Create block">＋</button></div>
+      <div className="side-tools"><button className="search-trigger" onClick={onOpenSearch}><span>⌕</span><span>Search &amp; filter</span><kbd>⌘K</kbd></button></div>
       <nav className="tree-wrap" aria-label="Block tree"><div className="section-label"><span>Tree</span></div>{root && renderNode(root, 0)}</nav>
     </aside>
   </>;
@@ -104,7 +104,8 @@ export function DocumentView({ scopeId, selectedId, editingId, blocks, reference
   const refTargets = new Map(references.map((reference) => [reference.toId, blocks.find((block) => block.id === reference.toId)]));
   const referenceSentence = <div className="doc-block reference-sentence" key="reference-sentence"><span className="drag-handle">⠿</span><p>Launch criteria are informed by {[...refTargets.values()].filter(Boolean).map((target) => <button className="ref-chip" key={target!.id} onClick={() => onSelect(target!.id)}>↗ {target!.title}</button>)}</p></div>;
   const editor = (block: DryvreBlock) => <BlockEditor bodyMd={block.bodyMd ?? ''} version={block.version ?? 0} onEdit={(bodyMd, version) => onEdit(block.id, bodyMd, version)} onCreateAfter={(bodyMd) => onCreateAfter(block.id, bodyMd)} onDelete={() => onDelete(block.id)} onExit={() => onEditEnd(block.id)} />;
-  const renderBlock = (block: DryvreBlock, depth = 0): React.ReactNode => {
+  const insertAfter = (block: DryvreBlock) => <button className="block-insert" key={`insert-${block.id}`} aria-label={`Insert block after ${block.title}`} onClick={() => void onCreateAfter(block.id, '')}><span aria-hidden="true">＋</span></button>;
+  const renderBlock = (block: DryvreBlock, depth = 0, showInsert = true): React.ReactNode => {
     const nested = children.get(block.id) ?? [];
     const isTask = Boolean(block.status);
     return <div className={depth ? 'doc-children' : ''} key={block.id}>
@@ -113,13 +114,14 @@ export function DocumentView({ scopeId, selectedId, editingId, blocks, reference
       {isTask ? <><div className="task-line"><button className={`check ${block.status === 'done' ? 'done' : ''}`} onClick={(event) => { event.stopPropagation(); onStatus(block.id, block.status === 'done' ? 'todo' : 'done'); }}>{block.status === 'done' ? '✓' : ''}</button><span className={block.status === 'done' ? 'done-copy' : ''}>{block.title}</span><StatusChip status={block.status!} /></div>{editingId === block.id ? editor(block) : block.bodyMd && <div className="doc-copy"><ReactMarkdown>{block.bodyMd}</ReactMarkdown></div>}</> : editingId === block.id ? editor(block) : block.bodyMd ? <div className="doc-copy"><ReactMarkdown>{block.bodyMd}</ReactMarkdown></div> : <h3>{block.title}</h3>}
       </div>
       {nested.map((child) => renderBlock(child, depth + 1))}
+      {showInsert && insertAfter(block)}
     </div>;
   };
   const scope = blocks.find((block) => block.id === scopeId);
   const scopeChildren = children.get(scopeId) ?? [];
   return <article className="doc-sheet">
     {scope && scopeId !== 'launch' && <div className={`doc-block ${selectedId === scope.id ? 'selected' : ''}`} onClick={() => { onSelect(scope.id); onEditStart(scope.id); }}><span className="drag-handle">⠿</span><h2>{scope.title}</h2>{editingId === scope.id ? editor(scope) : scope.bodyMd && <div className="doc-copy"><ReactMarkdown>{scope.bodyMd}</ReactMarkdown></div>}</div>}
-    {scopeChildren.flatMap((block) => block.id === 'thesis' && scopeId === 'launch' ? [renderBlock(block), referenceSentence] : [renderBlock(block)])}
+    {scopeChildren.flatMap((block) => block.id === 'thesis' && scopeId === 'launch' ? [renderBlock(block, 0, false), referenceSentence, insertAfter(block)] : [renderBlock(block)])}
   </article>;
 }
 

@@ -48,6 +48,7 @@ npm run dev          # Fastify and Vite with reload
 npm run typecheck    # all workspace type checks
 npm test             # shared contract tests
 npm run test:e2e     # real PostgreSQL + HTTP/WebSocket tests via Testcontainers
+npm run test:e2e:web # Chromium UI tests via Playwright
 npm run lint
 npm run build        # production server, SPA, and MCP artifacts
 npm start            # serve API + built SPA on port 3000

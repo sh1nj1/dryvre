@@ -145,6 +145,13 @@ export function BlockEditor({
             });
             return;
           }
+	  if (event.altKey && event.key === "Enter") {
+	    event.preventDefault();
+	    void save().then((saved) => {
+	      if (saved) return onCreateAfter("");
+	    });
+	    return;
+	  }
           if (command && event.key.toLocaleLowerCase() === "b") {
             event.preventDefault();
             replaceSelection(

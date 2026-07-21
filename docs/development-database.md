@@ -110,6 +110,15 @@ Run full PostgreSQL integration tests:
 npm run test:e2e
 ```
 
+Run browser UI end-to-end tests independently of PostgreSQL:
+
+```bash
+npx playwright install chromium # first run only
+npm run test:e2e:web
+```
+
+The UI suite starts the Vite application with its deterministic mock data and verifies the document editor, view navigation, and responsive interactions in Chromium. Tests live under `tests/ui` and use `playwright.config.ts`.
+
 The E2E harness creates a fresh `postgres:17-alpine` container, applies the production Drizzle migrations, starts a real Fastify HTTP/WebSocket server on a random local port, runs the tests, and removes the container. It currently covers:
 
 - migration and seeded root-tree reads;
@@ -121,4 +130,4 @@ Tests live under `tests/e2e` and use `vitest.e2e.config.ts`. Add API-level scena
 
 ## CI
 
-`.github/workflows/ci.yml` runs unit checks and the same Testcontainers E2E suite on an Ubuntu runner. No static CI database credentials or PostgreSQL service declaration are needed; Testcontainers supplies a random host port and disposes of the database after the job.
+`.github/workflows/ci.yml` runs unit checks, the Testcontainers E2E suite, and the Playwright Chromium UI suite on an Ubuntu runner. No static CI database credentials or PostgreSQL service declaration are needed; Testcontainers supplies a random host port and disposes of the database after the job.

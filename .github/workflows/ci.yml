@@ -21,4 +21,8 @@ jobs:
       - run: npm test
       - name: PostgreSQL E2E via Testcontainers
         run: npm run test:e2e
+      - name: Install Chromium for UI E2E
+        run: npx playwright install --with-deps chromium
+      - name: Browser UI E2E
+        run: npm run test:e2e:web
       - run: npm run build

@@ -3,6 +3,8 @@ dist/
 .env
 .env.local
 coverage/
+playwright-report/
+test-results/
 *.log
 .DS_Store
 apps/web/.vite/
