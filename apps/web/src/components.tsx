@@ -122,9 +122,16 @@ export function DocumentView({ scopeId, selectedId, editingId, blocks, reference
   };
   const scope = blocks.find((block) => block.id === scopeId);
   const scopeSummary = scope ? blockSummary(scope) : '';
+  // Render the scope heading through Markdown so inline formatting (code, links,
+  // emphasis) in the title renders instead of showing raw source — read mode
+  // renders Markdown, and non-scope blocks already render their heading via the
+  // full-body ReactMarkdown below. Reconstructing `## ${title}` keeps this in
+  // heading context, whose content is inline-only, so a title like `1. Foo`
+  // can't be reinterpreted as a list.
+  const scopeHeading = scope ? `## ${blockTitle(scope)}` : '';
   const scopeChildren = children.get(scopeId) ?? [];
   return <article className="doc-sheet">
-    {scope && scopeId !== 'launch' && <div className={`doc-block ${selectedId === scope.id ? 'selected' : ''}`} onClick={() => { onSelect(scope.id); onEditStart(scope.id); }}><span className="drag-handle">⠿</span>{editingId === scope.id ? editor(scope) : <><h2>{blockTitle(scope)}</h2>{scopeSummary && <div className="doc-copy"><ReactMarkdown>{scopeSummary}</ReactMarkdown></div>}</>}</div>}
+    {scope && scopeId !== 'launch' && <div className={`doc-block ${selectedId === scope.id ? 'selected' : ''}`} onClick={() => { onSelect(scope.id); onEditStart(scope.id); }}><span className="drag-handle">⠿</span>{editingId === scope.id ? editor(scope) : <><ReactMarkdown>{scopeHeading}</ReactMarkdown>{scopeSummary && <div className="doc-copy"><ReactMarkdown>{scopeSummary}</ReactMarkdown></div>}</>}</div>}
     {scopeChildren.flatMap((block) => block.id === 'thesis' && scopeId === 'launch' ? [renderBlock(block, 0, false), referenceSentence, insertAfter(block)] : [renderBlock(block)])}
   </article>;
 }

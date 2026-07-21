@@ -428,3 +428,36 @@ test('keeps the mode picker selectable during an in-flight run on a valid target
   // The in-flight run stays observable and cancellable throughout.
   await expect(page.getByRole('button', { name: 'Cancel' })).toBeVisible();
 });
+
+test('renders inline Markdown in the scoped document heading, not raw source', async ({ page }) => {
+  const rootId = '00000000-0000-4000-8000-000000000010';
+  const authorId = '00000000-0000-4000-8000-000000000001';
+  const root = {
+    id: rootId,
+    parentId: null,
+    path: `/${rootId}/`,
+    rank: 'a',
+    // A heading whose text carries inline Markdown: inline code and a link.
+    bodyMd: '# Deploy to `fly.io` and the [spec](https://example.com)\n\nShip when the checks are green.',
+    status: null,
+    authorId,
+    version: 0,
+    createdAt: '2026-07-22T00:00:00.000Z',
+    updatedAt: '2026-07-22T00:00:00.000Z',
+  };
+
+  await page.route('**/api/**', async (route) => {
+    const url = new URL(route.request().url());
+    if (url.pathname === `/api/trees/${rootId}`) return route.fulfill({ json: { blocks: [root] } });
+    return route.fulfill({ status: 404, json: { error: 'Not found' } });
+  });
+
+  await page.goto('/');
+  const heading = page.locator('.doc-sheet h2').first();
+  // The heading must render Markdown: inline code becomes <code>, the link an <a>.
+  await expect(heading.locator('code')).toHaveText('fly.io');
+  await expect(heading.getByRole('link', { name: 'spec' })).toHaveAttribute('href', 'https://example.com');
+  // And it must NOT leak the raw backtick/bracket source.
+  await expect(heading).not.toContainText('`');
+  await expect(heading).not.toContainText('](');
+});
