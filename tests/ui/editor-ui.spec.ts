@@ -177,18 +177,21 @@ test('runs a ready Local Agent, focuses its result, and can cancel another run',
   });
 
   await page.goto('/');
+  await expect(page.locator('.context-rail textarea')).toHaveCount(0);
+  await page.locator('.tree-row').filter({ hasText: 'Demo target' }).click();
+  await page.getByRole('tab', { name: /Stream/ }).click();
+  await page.getByLabel('Send as').selectOption(productId);
   await expect(page.locator('.agent-readiness')).toContainText('Demo runner · deterministic');
-  await expect(page.locator('.agent-toolbar select option')).toHaveCount(3);
-  await expect(page.locator('.agent-toolbar')).toContainText('2 skills');
-  await page.locator('.agent-target select').selectOption(targetId);
-  await page.getByPlaceholder('Ask this local Codex Agent…').fill('Implement the demo flow.');
-  await page.getByRole('button', { name: 'Run', exact: true }).click();
+  await expect(page.getByLabel('Send as').locator('option')).toHaveCount(4);
+  await expect(page.locator('.agent-readiness')).toContainText('2 skills');
+  await page.getByPlaceholder('Write to this block… Use @ to mention people, agents, or blocks').fill('Implement the demo flow.');
+  await page.getByRole('button', { name: 'Run Agent' }).click();
   await expect(page.locator('.run-state')).toContainText('Complete');
   await expect(page.getByText('Implemented and verified.')).toBeVisible();
   await expect(page.locator('.message.result-focus')).toBeVisible();
 
-  await page.getByPlaceholder('Ask this local Codex Agent…').fill('Run a cancellable check.');
-  await page.getByRole('button', { name: 'Run', exact: true }).click();
+  await page.getByPlaceholder('Write to this block… Use @ to mention people, agents, or blocks').fill('Run a cancellable check.');
+  await page.getByRole('button', { name: 'Run Agent' }).click();
   await expect(page.getByRole('button', { name: 'Cancel' })).toBeVisible();
   await page.getByRole('button', { name: 'Cancel' }).click();
   await expect(page.locator('.run-state')).toContainText('Cancelled');

@@ -108,6 +108,13 @@ export default function App() {
     const directive = parseBlockDirective(block.bodyMd);
     return block.rank !== null && !directive && !/^```agent-config\b/.test(block.bodyMd);
   });
+  const agentTarget = agentTargets.find((block) => block.id === selected.id);
+  const handleAgentSent = (targetId: string, resultBlockId?: string) => {
+    void refreshServerTree(targetId, true).then((next) => {
+      const fallback = next?.filter((block) => block.parentId === targetId && block.rank === null).at(-1)?.id;
+      setFocusedMessageId(resultBlockId ?? fallback);
+    });
+  };
 
   const selectFromTree = (id: string) => { setFocusedMessageId(undefined); setScopeId(id); setSelectedId(id); };
   const setStatus = async (id: string, status: TaskStatus) => {
@@ -195,9 +202,9 @@ export default function App() {
     <main><div className="canvas">
       {view === 'document' && <DocumentView scopeId={scope.id} selectedId={selected.id} editingId={editingId} blocks={snapshot.blocks} references={snapshot.references} onSelect={setSelectedId} onEditStart={setEditingId} onEditEnd={(id) => setEditingId((current) => current === id ? null : current)} onEdit={editBlock} onCreateAfter={createBlockAfter} onDelete={deleteBlock} onStatus={(id, status) => void setStatus(id, status)} />}
       {view === 'board' && <BoardView blocks={scopeBlocks} messages={snapshot.messages} selectedId={selected.id} onSelect={setSelectedId} onStatus={(id, status) => void setStatus(id, status)} />}
-      {view === 'stream' && <StreamView selected={selected} messages={selectedMessages} focusedMessageId={focusedMessageId} onSend={(body) => void sendMessage(body)} />}
+      {view === 'stream' && <StreamView selected={selected} messages={selectedMessages} focusedMessageId={focusedMessageId} agents={agents} agentTarget={agentTarget} onSend={(body) => void sendMessage(body)} onAgentSent={handleAgentSent} />}
     </div></main>
-    <ContextRail selected={selected} path={selectedScopePath} blocks={snapshot.blocks} references={snapshot.references} messages={selectedMessages} agents={agents} agentTargets={agentTargets} onAgentSent={(targetId, resultBlockId) => { void refreshServerTree(targetId, true).then((next) => { const fallback = next?.filter((block) => block.parentId === targetId && block.rank === null).at(-1)?.id; setFocusedMessageId(resultBlockId ?? fallback); }); }} onOpenStream={() => setView('stream')} />
+    <ContextRail selected={selected} path={selectedScopePath} blocks={snapshot.blocks} references={snapshot.references} messages={selectedMessages} onOpenStream={() => setView('stream')} />
     <SearchDialog open={searchOpen} blocks={snapshot.blocks} scopePath={scopePath} onClose={closeSearch} onApply={(filters) => void applySearch(filters)} />
   </div>;
 }
