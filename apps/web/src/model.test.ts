@@ -21,6 +21,12 @@ describe('Markdown block projections', () => {
     expect(blockSummary(block)).toBe('Details');
   });
 
+  it('removes a projected heading from summary content with CRLF line endings', () => {
+    const block = { bodyMd: '# Title\r\n\r\nDetails' };
+
+    expect(blockSummary(block)).toBe('Details');
+  });
+
   it('keeps a trailing hash that is part of the heading text', () => {
     expect(blockTitle({ title: 'x', bodyMd: '# Learn C#' })).toBe('Learn C#');
     expect(blockTitle({ title: 'x', bodyMd: '# foo#bar' })).toBe('foo#bar');

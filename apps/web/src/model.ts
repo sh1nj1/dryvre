@@ -67,9 +67,10 @@ export function blockTitle(block: Pick<DryvreBlock, 'title' | 'bodyMd'>) {
 
 export function blockSummary(block: Pick<DryvreBlock, 'bodyMd'>) {
   const bodyMd = block.bodyMd ?? '';
-  return /^#{1,6}\s+.*(?:\n|$)/.test(bodyMd.trimStart())
-    ? bodyMd.trimStart().replace(/^#{1,6}\s+.*(?:\n|$)/, '').trimStart()
-    : bodyMd;
+  const trimmed = bodyMd.trimStart();
+  // Accept CRLF line endings: `.` stops before `\r`, so the terminator must allow `\r?\n`.
+  const heading = /^#{1,6}\s+.*(?:\r?\n|$)/;
+  return heading.test(trimmed) ? trimmed.replace(heading, '').trimStart() : bodyMd;
 }
 
 export function blockPath(blockId: string, blocks: DryvreBlock[]) {
