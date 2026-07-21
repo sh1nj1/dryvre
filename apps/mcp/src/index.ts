@@ -61,7 +61,10 @@ registerTool('dryvre_edit_block', {
   title: 'Edit a Dryvre block',
   description: 'Replaces the canonical Markdown body. Pass version to detect concurrent edits.',
   inputSchema: editBlockInput,
-  annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
+  // Not idempotent: apply() mints a fresh clientOpId per call, so a retry bypasses op-log
+  // dedup and re-applies the edit (bumping version/updatedAt), or fails assertVersion when
+  // a version argument is supplied.
+  annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
 }, async (args) => {
   const { id, bodyMd, version } = editBlockInput.parse(args);
   const data = await apply({ type: 'edit', id, bodyMd, ...(version === undefined ? {} : { version }) });
