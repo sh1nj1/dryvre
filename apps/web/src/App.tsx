@@ -40,6 +40,7 @@ export default function App() {
   const selected = byId.get(selectedId) ?? scope;
   const scopePath = blockPath(scope.id, snapshot.blocks);
   const selectedPath = blockPath(selected.id, snapshot.blocks);
+  const selectedScopePath = selectedPath.slice(Math.max(0, selectedPath.findIndex((block) => block.id === scope.id)));
   const scopeBlocks = [scope, ...descendantsOf(scope.id, snapshot.blocks)];
   const selectedMessages = snapshot.messages.filter((message) => message.parentId === selected.id);
 
@@ -89,10 +90,10 @@ export default function App() {
     <Sidebar blocks={snapshot.blocks} rootId={snapshot.rootId} selectedId={scope.id} visibleIds={visibleIds} mobileOpen={mobileTreeOpen} onSelect={selectFromTree} onOpenSearch={() => setSearchOpen(true)} onClose={() => setMobileTreeOpen(false)} />
     <main><ViewHeader title={scope.title} view={view} onView={setView} /><div className="canvas">
       {view === 'document' && <DocumentView scopeId={scope.id} selectedId={selected.id} editingId={editingId} blocks={snapshot.blocks} references={snapshot.references} onSelect={setSelectedId} onEditStart={setEditingId} onEditEnd={(id) => setEditingId((current) => current === id ? null : current)} onEdit={editBlock} onCreateAfter={createBlockAfter} onDelete={deleteBlock} onStatus={(id, status) => void setStatus(id, status)} />}
-      {view === 'board' && <BoardView blocks={scopeBlocks} selectedId={selected.id} onSelect={setSelectedId} onStatus={(id, status) => void setStatus(id, status)} />}
-      {view === 'stream' && <StreamView selected={selected} path={selectedPath} messages={selectedMessages} onSend={(body) => void sendMessage(body)} onOpenDocument={() => setView('document')} />}
+      {view === 'board' && <BoardView blocks={scopeBlocks} messages={snapshot.messages} selectedId={selected.id} onSelect={setSelectedId} onStatus={(id, status) => void setStatus(id, status)} />}
+      {view === 'stream' && <StreamView selected={selected} path={selectedScopePath.slice(1)} messages={selectedMessages} onSend={(body) => void sendMessage(body)} onOpenDocument={() => setView('document')} />}
     </div></main>
-    <ContextRail selected={selected} path={selectedPath} blocks={snapshot.blocks} references={snapshot.references} messages={selectedMessages} onOpenStream={() => setView('stream')} />
+    <ContextRail selected={selected} path={selectedScopePath} blocks={snapshot.blocks} references={snapshot.references} messages={selectedMessages} onOpenStream={() => setView('stream')} />
     <SearchDialog open={searchOpen} blocks={snapshot.blocks} scopePath={scopePath} onClose={closeSearch} onApply={(filters) => void applySearch(filters)} />
   </div>;
 }

@@ -56,7 +56,7 @@ export function Sidebar({ blocks, rootId, selectedId, visibleIds, mobileOpen, on
     <div className={`mobile-backdrop ${mobileOpen ? 'show' : ''}`} onClick={onClose} />
     <aside className={`sidebar ${mobileOpen ? 'mobile-open' : ''}`}>
       <div className="side-tools"><button className="search-trigger" onClick={onOpenSearch}><span>⌕</span><span>Search &amp; filter</span><kbd>⌘K</kbd></button><button className="icon-btn" aria-label="Create block">＋</button></div>
-      <nav className="tree-wrap" aria-label="Block tree"><div className="section-label"><span>Tree</span></div>{root && renderNode(root, 0)}</nav>
+      <nav className="tree-wrap" aria-label="Block tree"><div className="section-label"><span>Tree</span><span aria-hidden="true">•••</span></div>{root && renderNode(root, 0)}</nav>
     </aside>
   </>;
 }
@@ -98,6 +98,7 @@ export function DocumentView({ scopeId, selectedId, editingId, blocks, reference
   }, [blocks]);
 
   const refTargets = new Map(references.map((reference) => [reference.toId, blocks.find((block) => block.id === reference.toId)]));
+  const referenceSentence = <div className="doc-block reference-sentence" key="reference-sentence"><span className="drag-handle">⠿</span><p>Launch criteria are informed by {[...refTargets.values()].filter(Boolean).map((target) => <button className="ref-chip" key={target!.id} onClick={() => onSelect(target!.id)}>↗ {target!.title}</button>)}</p></div>;
   const editor = (block: DryvreBlock) => <BlockEditor bodyMd={block.bodyMd ?? ''} version={block.version ?? 0} onEdit={(bodyMd, version) => onEdit(block.id, bodyMd, version)} onCreateAfter={(bodyMd) => onCreateAfter(block.id, bodyMd)} onDelete={() => onDelete(block.id)} onExit={() => onEditEnd(block.id)} />;
   const renderBlock = (block: DryvreBlock, depth = 0): React.ReactNode => {
     const nested = children.get(block.id) ?? [];
@@ -114,16 +115,15 @@ export function DocumentView({ scopeId, selectedId, editingId, blocks, reference
   const scopeChildren = children.get(scopeId) ?? [];
   return <article className="doc-sheet">
     {scope && scopeId !== 'launch' && <div className={`doc-block ${selectedId === scope.id ? 'selected' : ''}`} onClick={() => { onSelect(scope.id); onEditStart(scope.id); }}><span className="drag-handle">⠿</span><h2>{scope.title}</h2>{editingId === scope.id ? editor(scope) : scope.bodyMd && <div className="doc-copy"><ReactMarkdown>{scope.bodyMd}</ReactMarkdown></div>}</div>}
-    {scopeChildren.map((block) => renderBlock(block))}
-    {scopeId === 'launch' && <div className="doc-block reference-sentence"><span className="drag-handle">⠿</span><p>Launch criteria are informed by {[...refTargets.values()].filter(Boolean).map((target) => <button className="ref-chip" key={target!.id} onClick={() => onSelect(target!.id)}>↗ {target!.title}</button>)}</p></div>}
+    {scopeChildren.flatMap((block) => block.id === 'thesis' && scopeId === 'launch' ? [renderBlock(block), referenceSentence] : [renderBlock(block)])}
   </article>;
 }
 
-export function BoardView({ blocks, selectedId, onSelect, onStatus }: { blocks: DryvreBlock[]; selectedId: string; onSelect: (id: string) => void; onStatus: (id: string, status: TaskStatus) => void }) {
+export function BoardView({ blocks, messages, selectedId, onSelect, onStatus }: { blocks: DryvreBlock[]; messages: BlockMessage[]; selectedId: string; onSelect: (id: string) => void; onStatus: (id: string, status: TaskStatus) => void }) {
   const columns: { status: TaskStatus; label: string }[] = [{ status: 'todo', label: 'To do' }, { status: 'in_progress', label: 'In progress' }, { status: 'done', label: 'Done' }];
   return <div className="board">{columns.map((column) => {
     const cards = blocks.filter((block) => block.status === column.status);
-    return <section className="column" key={column.status}><header className="column-head"><span className="column-dot" />{column.label}<span>{cards.length}</span></header><div className="cards">{cards.map((block) => <article className={`card ${selectedId === block.id ? 'selected' : ''}`} key={block.id} onClick={() => onSelect(block.id)}><div className="card-meta"><span>{block.parentId ? blocks.find((item) => item.id === block.parentId)?.title : 'Root'}</span><code>#{block.id.slice(0, 4).toUpperCase()}</code></div><h3>{block.title}</h3><p>{block.bodyMd}</p><div className="card-footer"><span className={`mini-avatar ${block.author === 'Dryvre AI' ? 'agent' : ''}`}>{block.author === 'Dryvre AI' ? 'AI' : block.author.split(' ').map((part) => part[0]).join('').slice(0, 2)}</span><select value={block.status} onClick={(event) => event.stopPropagation()} onChange={(event) => onStatus(block.id, event.target.value as TaskStatus)}>{columns.map((item) => <option value={item.status} key={item.status}>{item.label}</option>)}</select></div></article>)}<button className="add-card">＋ Add block</button></div></section>;
+    return <section className="column" key={column.status}><header className="column-head"><span className="column-dot" />{column.label}<span>{cards.length}</span></header><div className="cards">{cards.map((block) => <article className={`card ${selectedId === block.id ? 'selected' : ''}`} key={block.id} onClick={() => onSelect(block.id)}><div className="card-meta"><span>{block.parentId ? blocks.find((item) => item.id === block.parentId)?.title : 'Root'}</span><code>#{block.id.slice(0, 4).toUpperCase()}</code></div><h3>{block.title}</h3><p>{block.bodyMd}</p><div className="card-footer"><span className={`mini-avatar ${block.author === 'Dryvre AI' ? 'agent' : ''}`}>{block.author === 'Dryvre AI' ? 'AI' : block.author.split(' ').map((part) => part[0]).join('').slice(0, 2)}</span><span className="comment-count">◉ {messages.filter((message) => message.parentId === block.id).length}</span><select aria-label={`Change status for ${block.title}`} value={block.status} onClick={(event) => event.stopPropagation()} onChange={(event) => onStatus(block.id, event.target.value as TaskStatus)}>{columns.map((item) => <option value={item.status} key={item.status}>{item.label}</option>)}</select></div></article>)}<button className="add-card">＋ Add block</button></div></section>;
   })}</div>;
 }
 
@@ -141,7 +141,7 @@ export function ContextRail({ selected, path, blocks, references, messages, onOp
   const descendants = descendantsOf(selected.id, blocks);
   return <aside className="context-rail"><header className="rail-head"><strong>Block context</strong><span>Auto-built</span></header><div className="rail-scroll"><div className="inspector-label">Selected block</div><div className="selected-card"><span className="path">{path.slice(0, -1).map((block) => block.title).join(' / ') || 'Root'}</span><h3>{selected.title}</h3><p>{selected.bodyMd ?? 'A first-class block in the shared tree.'}</p><div className="selected-meta">Updated {selected.updatedLabel} · {selected.author}</div></div>
     {messages.length > 0 && <button className="messages-card" onClick={onOpenStream}><span className="messages-icon">◉</span><span className="messages-copy"><strong>{messages.length} messages</strong><span>{[...new Set(messages.map((message) => message.author))].join(', ')}</span></span><span className="messages-arrow">→</span></button>}
-    <div className="inspector-label section-gap">AI reads</div><ul className="context-list">{path.map((block) => <li className={`context-item ${block.id === selected.id ? 'current' : ''}`} key={block.id}>{block.title}<small>{block.id === selected.id ? `current block · ${descendants.length} descendants` : block.parentId ? 'parent block' : 'root'}</small></li>)}</ul>
+    <div className="inspector-label section-gap">AI reads</div><ul className="context-list">{path.map((block, index) => <li className={`context-item ${block.id === selected.id ? 'current' : ''}`} key={block.id}>{block.title}<small>{block.id === selected.id ? `current block · ${descendants.length} descendants` : index === 0 ? `root · ${descendantsOf(block.id, blocks).length} descendant blocks` : 'parent block'}</small></li>)}</ul>
     <div className="inspector-label section-gap">References</div>{relevantRefs.length ? relevantRefs.map((reference) => { const target = blocks.find((block) => block.id === reference.toId); return target && <div className="reference-card" key={reference.toId}><strong>↗ {target.title}</strong><span>{reference.summary}</span></div>; }) : <p className="empty-copy">No explicit references.</p>}
   </div></aside>;
 }
