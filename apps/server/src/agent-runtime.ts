@@ -134,7 +134,7 @@ export async function createAgentRuntime(
     code: string,
   ) {
     if (cancelled.has(runId)) return;
-    await db
+    const [transitioned] = await db
       .update(agentRuns)
       .set({
         status: "failed",
@@ -142,7 +142,14 @@ export async function createAgentRuntime(
         finishedAt: new Date(),
         pid: null,
       })
-      .where(eq(agentRuns.id, runId));
+      .where(
+        and(
+          eq(agentRuns.id, runId),
+          inArray(agentRuns.status, ["queued", "running"]),
+        ),
+      )
+      .returning({ id: agentRuns.id });
+    if (!transitioned) return;
     const blockId = randomUUID();
     const envelope = {
       clientOpId: randomUUID(),
@@ -230,7 +237,8 @@ export async function createAgentRuntime(
           void db
             .update(agentRuns)
             .set({ pid: child.pid ?? null })
-            .where(eq(agentRuns.id, runId));
+            .where(eq(agentRuns.id, runId))
+            .catch(() => undefined);
         },
       });
       children.delete(runId);
@@ -360,7 +368,7 @@ export async function createAgentRuntime(
         .returning();
       if (!row) throw new Error("Could not create Agent run");
       publish({ type: "agent_run_status", runId: row.id, status: "queued" });
-      void execute(row.id, input, requestedBy);
+      void execute(row.id, input, requestedBy).catch(() => undefined);
       return serializeRun(row);
       } catch (error) {
         activeAgents.delete(input.agentBlockId);

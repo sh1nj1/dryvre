@@ -8,6 +8,43 @@ import { blockPath, descendantsOf } from './model';
 import { ROOT_ID } from './use-tree';
 import './styles.css';
 
+const HUMAN_ID = '00000000-0000-4000-8000-000000000001';
+
+function titleOf(block: Block) {
+  return block.bodyMd.replace(/^#+\s*/, '').split('\n')[0] || 'Untitled';
+}
+
+function toServerSnapshot(blocks: Block[]): DryvreSnapshot {
+  return {
+    rootId: ROOT_ID,
+    focusedRootId: ROOT_ID,
+    blocks: blocks.filter((block) => block.rank !== null).map((block) => {
+      const status = block.status === 'blocked' ? 'in_progress' : block.status;
+      return {
+        id: block.id,
+        parentId: block.parentId,
+        title: titleOf(block),
+        bodyMd: block.bodyMd,
+        ...(status ? { status } : {}),
+        author: block.authorId === HUMAN_ID ? 'Soonoh' : 'Dryvre Agent',
+        updatedLabel: new Date(block.updatedAt).toLocaleString(),
+        canonical: true,
+        version: block.version,
+      };
+    }),
+    messages: blocks.filter((block) => block.rank === null).map((block) => ({
+      id: block.id,
+      parentId: block.parentId ?? ROOT_ID,
+      author: block.authorId === HUMAN_ID ? 'Soonoh' : 'Dryvre Agent',
+      initials: block.authorId === HUMAN_ID ? 'SO' : 'AI',
+      body: block.bodyMd,
+      timeLabel: new Date(block.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      agent: block.authorId !== HUMAN_ID,
+    })),
+    references: [],
+  };
+}
+
 export default function App() {
   const [snapshot, setSnapshot] = useState<DryvreSnapshot>();
   const [view, setView] = useState<ViewMode>('document');
@@ -18,13 +55,26 @@ export default function App() {
   const [searchMatches, setSearchMatches] = useState<Set<string> | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [serverBlocks, setServerBlocks] = useState<Block[]>([]);
+  const [serverBacked, setServerBacked] = useState(false);
 
-  useEffect(() => { void dryvreDataSource.load().then(setSnapshot); }, []);
-  const refreshAgentTree = useCallback(async () => {
-    try { setServerBlocks((await api.tree(ROOT_ID)).blocks); }
-    catch { setServerBlocks([]); }
+  const refreshServerTree = useCallback(async (focusId?: string, revealStream = false) => {
+    try {
+      const next = (await api.tree(ROOT_ID)).blocks;
+      const focus = focusId && next.some((block) => block.id === focusId) ? focusId : ROOT_ID;
+      setServerBlocks(next);
+      setSnapshot(toServerSnapshot(next));
+      setServerBacked(true);
+      setScopeId(focus);
+      setSelectedId(focus);
+      if (revealStream) setView('stream');
+    } catch { /* The mock snapshot remains available for standalone UI demos. */ }
   }, []);
-  useEffect(() => { void refreshAgentTree(); }, [refreshAgentTree]);
+  useEffect(() => {
+    void dryvreDataSource.load().then((initial) => {
+      setSnapshot(initial);
+      if (import.meta.env.VITE_MOCK_DATA_ONLY !== 'true') return refreshServerTree();
+    });
+  }, [refreshServerTree]);
 
   const closeSearch = useCallback(() => setSearchOpen(false), []);
   useEffect(() => {
@@ -60,23 +110,54 @@ export default function App() {
 
   const selectFromTree = (id: string) => { setScopeId(id); setSelectedId(id); };
   const setStatus = async (id: string, status: TaskStatus) => {
+    if (serverBacked) {
+      const block = serverBlocks.find((item) => item.id === id);
+      if (!block) return;
+      await api.apply({ type: 'setStatus', id, status, version: block.version });
+      await refreshServerTree(id);
+      return;
+    }
     await dryvreDataSource.setStatus(id, status);
     setSnapshot((current) => current && ({ ...current, blocks: current.blocks.map((block) => block.id === id ? { ...block, status } : block) }));
   };
   const sendMessage = async (body: string) => {
+    if (serverBacked) {
+      await api.apply({ type: 'create', parentId: selected.id, bodyMd: body, stream: true });
+      await refreshServerTree(selected.id, true);
+      return;
+    }
     const message = await dryvreDataSource.createMessage(selected.id, body);
     setSnapshot((current) => current && ({ ...current, messages: [...current.messages, message] }));
   };
   const applySearch = async (filters: SearchFilters) => {
     const empty = !filters.text && !filters.referenceId && !filters.status && !filters.author && !filters.updated;
+    if (serverBacked) {
+      const matches = empty ? serverBlocks : (await api.tree(ROOT_ID, filters.text)).blocks;
+      setSearchMatches(empty ? null : new Set(matches.map((block) => block.id)));
+      return;
+    }
     setSearchMatches(empty ? null : new Set(await dryvreDataSource.search(filters)));
   };
   const editBlock = async (id: string, bodyMd: string, version: number) => {
+    if (serverBacked) {
+      await api.apply({ type: 'edit', id, bodyMd, version });
+      await refreshServerTree(id);
+      return { version: version + 1 };
+    }
     const saved = await dryvreDataSource.editBlock(id, bodyMd, version);
     setSnapshot((current) => current && ({ ...current, blocks: current.blocks.map((block) => block.id === id ? saved : block) }));
     return { version: saved.version ?? version + 1 };
   };
   const createBlockAfter = async (id: string, bodyMd: string) => {
+    if (serverBacked) {
+      const current = serverBlocks.find((item) => item.id === id);
+      if (!current) return;
+      const blockId = crypto.randomUUID();
+      await api.apply({ type: 'create', id: blockId, parentId: current.parentId, afterId: id, bodyMd, stream: false });
+      await refreshServerTree(blockId);
+      setEditingId(blockId);
+      return;
+    }
     const block = await dryvreDataSource.createBlockAfter(id, bodyMd);
     setSnapshot((current) => {
       if (!current) return current;
@@ -89,6 +170,14 @@ export default function App() {
     setEditingId(block.id);
   };
   const deleteBlock = async (id: string) => {
+    if (serverBacked) {
+      const current = serverBlocks.find((item) => item.id === id);
+      if (!current) return;
+      await api.apply({ type: 'delete', id, version: current.version });
+      setEditingId(null);
+      await refreshServerTree(current.parentId ?? ROOT_ID);
+      return;
+    }
     await dryvreDataSource.deleteBlock(id);
     setSnapshot((current) => {
       if (!current) return current;
@@ -107,7 +196,7 @@ export default function App() {
       {view === 'board' && <BoardView blocks={scopeBlocks} messages={snapshot.messages} selectedId={selected.id} onSelect={setSelectedId} onStatus={(id, status) => void setStatus(id, status)} />}
       {view === 'stream' && <StreamView selected={selected} messages={selectedMessages} onSend={(body) => void sendMessage(body)} />}
     </div></main>
-    <ContextRail selected={selected} path={selectedScopePath} blocks={snapshot.blocks} references={snapshot.references} messages={selectedMessages} agents={agents} agentTargets={agentTargets} onAgentSent={refreshAgentTree} onOpenStream={() => setView('stream')} />
+    <ContextRail selected={selected} path={selectedScopePath} blocks={snapshot.blocks} references={snapshot.references} messages={selectedMessages} agents={agents} agentTargets={agentTargets} onAgentSent={(targetId) => refreshServerTree(targetId, true)} onOpenStream={() => setView('stream')} />
     <SearchDialog open={searchOpen} blocks={snapshot.blocks} scopePath={scopePath} onClose={closeSearch} onApply={(filters) => void applySearch(filters)} />
   </div>;
 }

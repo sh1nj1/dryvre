@@ -144,7 +144,7 @@ export function StreamView({ selected, messages, onSend }: { selected: DryvreBlo
   </div>;
 }
 
-export function ContextRail({ selected, path, blocks, references, messages, agents, agentTargets, onAgentSent, onOpenStream }: { selected: DryvreBlock; path: DryvreBlock[]; blocks: DryvreBlock[]; references: BlockReference[]; messages: BlockMessage[]; agents: Block[]; agentTargets: Block[]; onAgentSent: () => void; onOpenStream: () => void }) {
+export function ContextRail({ selected, path, blocks, references, messages, agents, agentTargets, onAgentSent, onOpenStream }: { selected: DryvreBlock; path: DryvreBlock[]; blocks: DryvreBlock[]; references: BlockReference[]; messages: BlockMessage[]; agents: Block[]; agentTargets: Block[]; onAgentSent: (targetId: string) => void; onOpenStream: () => void }) {
   const relevantRefs = references.filter((reference) => reference.fromId === selected.id);
   const descendants = descendantsOf(selected.id, blocks);
   return <aside className="context-rail"><header className="rail-head"><strong>Block context</strong><span>Auto-built</span></header><div className="rail-scroll"><div className="inspector-label">Selected block</div><div className="selected-card"><span className="path">{path.slice(0, -1).map((block) => block.title).join(' / ') || 'Root'}</span><h3>{selected.title}</h3><p>{selected.bodyMd ?? 'A first-class block in the shared tree.'}</p><div className="selected-meta">Updated {selected.updatedLabel} · {selected.author}</div></div>
@@ -184,7 +184,7 @@ const runLabels: Record<AgentRun['status'], string> = {
   queued: 'Queued', running: 'Codex is working…', succeeded: 'Complete', failed: 'Failed', cancelled: 'Cancelled',
 };
 
-export function AgentComposer({ agents, targets, onSent }: { agents: Block[]; targets: Block[]; onSent: () => void }) {
+export function AgentComposer({ agents, targets, onSent }: { agents: Block[]; targets: Block[]; onSent: (targetId: string) => void }) {
   const [agentId, setAgentId] = useState(agents[0]?.id ?? '');
   const [targetId, setTargetId] = useState(targets[0]?.id ?? '');
   const [value, setValue] = useState('');
@@ -216,11 +216,11 @@ export function AgentComposer({ agents, targets, onSent }: { agents: Block[]; ta
     const timer = window.setInterval(() => {
       void api.agentRun(run.id).then((next) => {
         setRun(next);
-        if (!['queued', 'running'].includes(next.status)) onSent();
+        if (!['queued', 'running'].includes(next.status)) onSent(targetId);
       }).catch(() => undefined);
     }, 800);
     return () => window.clearInterval(timer);
-  }, [onSent, run]);
+  }, [onSent, run, targetId]);
 
   async function send() {
     if (!agentId || !targetId || !value.trim() || run && ['queued', 'running'].includes(run.status)) return;
