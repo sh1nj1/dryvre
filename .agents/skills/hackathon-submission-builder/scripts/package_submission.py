@@ -68,6 +68,8 @@ def copy_declared(source: Path, destination: Path, output_root: Path) -> list[di
             fail(f"symbolic links are not packaged: {child}")
         if child.is_file():
             copied.append(copy_file(child, destination / child.relative_to(source), output_root))
+    if not copied:
+        fail(f"source directory contains no files: {source}")
     return copied
 
 
