@@ -34,6 +34,7 @@ FORBIDDEN_PATH = re.compile(
 )
 SECRET_TEXT = re.compile(
     r"(-----BEGIN (?:[A-Z0-9]+(?: [A-Z0-9]+)* )?PRIVATE KEY-----|"
+    r"xox(?:a|b|p|r|s)-[A-Za-z0-9-]{8,}|"
     r"(?:OPENAI|ANTHROPIC|AWS_SECRET_ACCESS|GITHUB|GH|STRIPE)_[A-Z0-9_]*\s*[=:]\s*['\"]?[A-Za-z0-9_\-/+=]{16,}|"
     r"(?:_auth|_authToken|npmAuthToken)\s*[=:]\s*['\"]?[A-Za-z0-9_\-/+=]{8,}|"
     r"(?:client_secret|clientSecret)['\"]?\s*[=:]\s*['\"]?[A-Za-z0-9_.\-/+=]{8,}|"
@@ -49,6 +50,7 @@ SRT_TIMING = re.compile(
     r"\d{2}:\d{2}:\d{2},\d{3}\s+-->\s+\d{2}:\d{2}:\d{2},\d{3}(?:\s+.*)?"
 )
 BINARY_SUFFIXES = {".png", ".jpg", ".jpeg", ".gif", ".pdf", ".mp4", ".webm", ".zip"}
+VIDEO_SUFFIXES = {".mp4", ".webm"}
 TAR_SUFFIXES = (".tar", ".tar.gz", ".tgz", ".tar.bz2", ".tbz2", ".tar.xz", ".txz")
 UNSUPPORTED_ARCHIVE_SUFFIXES = (".gz", ".bz2", ".xz", ".zst", ".7z", ".rar")
 
@@ -137,9 +139,13 @@ def probe_video(
 
 
 def probe_video_stream(
-    stream, location: str, max_video_seconds: float | None, errors: list[str]
+    stream,
+    suffix: str,
+    location: str,
+    max_video_seconds: float | None,
+    errors: list[str],
 ) -> None:
-    with tempfile.NamedTemporaryFile(suffix=".mp4") as temporary:
+    with tempfile.NamedTemporaryFile(suffix=suffix) as temporary:
         shutil.copyfileobj(stream, temporary)
         temporary.flush()
         probe_video(Path(temporary.name), location, max_video_seconds, errors)
@@ -191,10 +197,12 @@ def inspect_zip(
                 if suffix not in BINARY_SUFFIXES:
                     with archive.open(member) as stream:
                         scan_text_stream(stream, location, errors, warnings)
-                if suffix == ".mp4":
+                if suffix in VIDEO_SUFFIXES:
                     video_count += 1
                     with archive.open(member) as stream:
-                        probe_video_stream(stream, location, max_video_seconds, errors)
+                        probe_video_stream(
+                            stream, suffix, location, max_video_seconds, errors
+                        )
                 elif suffix == ".srt":
                     try:
                         text = archive.read(member).decode("utf-8")
@@ -249,14 +257,16 @@ def inspect_tar(
                         continue
                     with stream:
                         scan_text_stream(stream, location, errors, warnings)
-                if suffix == ".mp4":
+                if suffix in VIDEO_SUFFIXES:
                     video_count += 1
                     stream = archive.extractfile(member)
                     if stream is None:
                         errors.append(f"archive member cannot be inspected: {location}")
                     else:
                         with stream:
-                            probe_video_stream(stream, location, max_video_seconds, errors)
+                            probe_video_stream(
+                                stream, suffix, location, max_video_seconds, errors
+                            )
                 elif suffix == ".srt":
                     stream = archive.extractfile(member)
                     if stream is None:
@@ -341,7 +351,7 @@ def main() -> int:
         if kind is None and path.suffix.lower() not in BINARY_SUFFIXES:
             with path.open("rb") as stream:
                 scan_text_stream(stream, relative, errors, warnings)
-        if path.suffix.lower() == ".mp4":
+        if path.suffix.lower() in VIDEO_SUFFIXES:
             video_count += 1
             probe_video(path, relative, args.max_video_seconds, errors)
         elif path.suffix.lower() == ".srt":
