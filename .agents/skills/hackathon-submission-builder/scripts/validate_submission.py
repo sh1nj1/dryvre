@@ -121,17 +121,20 @@ def probe_video(
         errors.append(f"cannot inspect video without ffprobe: {location}")
         return
     probe = subprocess.run([
-        "ffprobe", "-v", "error", "-show_entries", "format=duration",
-        "-of", "default=noprint_wrappers=1:nokey=1", str(path),
+        "ffprobe", "-v", "error", "-show_entries", "format=duration:stream=codec_type",
+        "-of", "json", str(path),
     ], capture_output=True, text=True)
     if probe.returncode != 0:
         errors.append(f"unreadable video: {location}")
         return
     try:
-        duration = float(probe.stdout.strip())
-    except ValueError:
+        metadata = json.loads(probe.stdout)
+        duration = float(metadata.get("format", {}).get("duration", ""))
+    except (ValueError, TypeError, json.JSONDecodeError):
         errors.append(f"unreadable video duration: {location}")
         return
+    if not any(stream.get("codec_type") == "video" for stream in metadata.get("streams", [])):
+        errors.append(f"no video stream: {location}")
     if not math.isfinite(duration) or duration <= 0:
         errors.append(f"empty video: {location}")
     if max_video_seconds is not None and duration > max_video_seconds:

@@ -74,7 +74,7 @@ async function perform(step) {
       await page.locator(step.selector).filter({ hasText: String(step.text) }).waitFor({ state: "visible", timeout });
       break;
     }
-    case "assertUrl": if (!page.url().includes(step.pattern)) throw new Error(`expected URL to contain ${step.pattern}; got ${page.url()}`); break;
+    case "assertUrl": await page.waitForURL((url) => url.href.includes(String(step.pattern)), { timeout }); break;
     case "screenshot": await page.screenshot({ path: path.join(outputDir, "screenshots", `${safeName(step.name)}.png`), fullPage: Boolean(step.fullPage) }); break;
     default: throw new Error(`unsupported scenario action: ${step.action}`);
   }
