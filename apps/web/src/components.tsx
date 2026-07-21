@@ -5,6 +5,7 @@ import type { BlockMessage, BlockReference, DryvreBlock, SearchFilters, TaskStat
 import { blockSummary, blockTitle, descendantsOf, headingMarkdown } from './model';
 import { BlockEditor, type EditorSaveResult } from './block-editor';
 import { api } from './api';
+import { shouldSendComposerMessage } from './composer-keyboard';
 
 const statusLabels: Record<TaskStatus, string> = { todo: 'To do', in_progress: 'In progress', blocked: 'Blocked', done: 'Done' };
 
@@ -317,7 +318,12 @@ export function StreamComposer({ selected, agents, target, live, liveMessage, co
       : 'Local Agent unavailable';
   const agentSelected = Boolean(agentId);
   return <div className="composer stream-composer">
-    <textarea value={value} placeholder="Write to this block… Use @ to mention people, agents, or blocks" onChange={(event) => setValue(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) void send(); }} />
+    <textarea value={value} placeholder="Write to this block… Use @ to mention people, agents, or blocks" onChange={(event) => setValue(event.target.value)} onKeyDown={(event) => {
+      if (!shouldSendComposerMessage({ key: event.key, shiftKey: event.shiftKey, isComposing: event.nativeEvent.isComposing, keyCode: event.nativeEvent.keyCode })) return;
+      event.preventDefault();
+      void send();
+    }} />
+    <div className="composer-shortcut-hint">Enter to send · Shift+Enter for new line</div>
     {(agentSelected || busy) && <div className="agent-composer-status">
       {agentSelected && <div className={`agent-readiness ${readiness?.ready ? 'ready' : 'not-ready'}`}><i />{readinessLabel}<span>{skillNames.length ? `${skillNames.length} skills` : 'No skills'}</span>{readiness?.error && <small>{agentError(readiness.error)}</small>}</div>}
       {run && <div className={`run-state run-${run.status}`}><i />{runLabels[run.status]}{run.errorCode && <small>{agentError(run.errorCode)}</small>}{busy && <button onClick={() => void cancel()}>Cancel</button>}</div>}
