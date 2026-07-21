@@ -25,12 +25,12 @@ SECRET_PATH = re.compile(
 )
 FORBIDDEN_PATH = re.compile(
     r"((^|/)node_modules(/|$)|(^|/)(?:\.git|\.hg|\.svn|\.bzr)(/|$)|"
-    r"(^|/)[^/]+\.(?:db|sqlite|sqlite3)(?:-(?:wal|shm))?$|"
+    r"(^|/)[^/]+\.(?:db|sqlite|sqlite3)(?:-(?:wal|shm|journal))?$|"
     r"(^|/)[^/]*(?:dump|backup)[^/]*\.sql$)",
     re.I,
 )
 SECRET_TEXT = re.compile(
-    r"(-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----|"
+    r"(-----BEGIN (?:[A-Z0-9]+(?: [A-Z0-9]+)* )?PRIVATE KEY-----|"
     r"(?:OPENAI|ANTHROPIC|AWS_SECRET_ACCESS|GITHUB|GH|STRIPE)_[A-Z0-9_]*\s*[=:]\s*['\"]?[A-Za-z0-9_\-/+=]{16,}|"
     r"(?:_auth|_authToken|npmAuthToken)\s*[=:]\s*['\"]?[A-Za-z0-9_\-/+=]{8,}|"
     r"[a-z][a-z0-9+.-]*://[^/\s:@]+:[^/\s@]+@[^\s'\"<>]+)",
