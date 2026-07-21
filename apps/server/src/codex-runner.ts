@@ -278,6 +278,20 @@ export function stopCodexProcess(child: ChildProcessWithoutNullStreams) {
   }, 3_000).unref();
 }
 
+export function killCodexProcessGroup(
+  pid: number,
+  signal: NodeJS.Signals = "SIGKILL",
+  kill: (target: number, signal: NodeJS.Signals) => boolean = process.kill,
+) {
+  if (!Number.isSafeInteger(pid) || pid <= 1 || pid === process.pid) return false;
+  try {
+    kill(process.platform === "win32" ? pid : -pid, signal);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export async function checkCodexReadiness(config: AppConfig) {
   if (config.DRYVRE_AGENT_FAKE)
     return { ready: true, mode: "fake" as const, version: "fake" };

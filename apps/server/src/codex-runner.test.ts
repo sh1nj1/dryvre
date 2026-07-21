@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { AppConfig } from "./config.js";
-import { checkCodexReadiness, executeProcess, runCodex } from "./codex-runner.js";
+import { checkCodexReadiness, executeProcess, killCodexProcessGroup, runCodex } from "./codex-runner.js";
 
 const config: AppConfig = {
   NODE_ENV: "test",
@@ -41,6 +41,21 @@ describe("Codex runner", () => {
       mode: "fake",
       version: "fake",
     });
+  });
+
+  it("kills a persisted detached process group during reconciliation", () => {
+    const calls: Array<[number, NodeJS.Signals]> = [];
+    expect(killCodexProcessGroup(42_424, "SIGKILL", (target, signal) => {
+      calls.push([target, signal]);
+      return true;
+    })).toBe(true);
+    expect(calls).toEqual([[
+      process.platform === "win32" ? 42_424 : -42_424,
+      "SIGKILL",
+    ]]);
+    expect(killCodexProcessGroup(process.pid, "SIGKILL", () => {
+      throw new Error("The server must never kill itself");
+    })).toBe(false);
   });
 
   it("settles the process promise when the child closes stdin early", async () => {

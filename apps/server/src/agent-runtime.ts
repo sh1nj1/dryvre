@@ -26,6 +26,7 @@ import {
 } from "./block-service.js";
 import {
   checkCodexReadiness,
+  killCodexProcessGroup,
   resolveAgentWorkspace,
   runCodex,
   stopCodexProcess,
@@ -80,6 +81,18 @@ export async function createAgentRuntime(
   const children = new Map<string, ChildProcessWithoutNullStreams>();
   const cancelled = new Set<string>();
   const activeAgents = new Set<string>();
+  const interruptedRuns = await db
+    .select({ pid: agentRuns.pid })
+    .from(agentRuns)
+    .where(
+      and(
+        inArray(agentRuns.status, ["queued", "running"]),
+        isNotNull(agentRuns.pid),
+      ),
+    );
+  for (const run of interruptedRuns) {
+    if (run.pid !== null) killCodexProcessGroup(run.pid);
+  }
   await db
     .update(agentRuns)
     .set({
@@ -237,7 +250,12 @@ export async function createAgentRuntime(
           void db
             .update(agentRuns)
             .set({ pid: child.pid ?? null })
-            .where(eq(agentRuns.id, runId))
+            .where(
+              and(
+                eq(agentRuns.id, runId),
+                eq(agentRuns.status, "running"),
+              ),
+            )
             .catch(() => undefined);
         },
       });
