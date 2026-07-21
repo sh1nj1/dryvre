@@ -288,4 +288,5 @@ button { cursor: pointer; }
   .task-line { align-items: flex-start; }
   .filter-grid { grid-template-columns: 1fr; }
   .search-dialog-foot > span { display: none; }
+  .composer-shortcut-hint { display: none; }
 }

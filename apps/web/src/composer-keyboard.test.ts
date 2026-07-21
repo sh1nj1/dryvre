@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   type ComposerKeyEvent,
+  DESKTOP_COMPOSER_QUERY,
+  isEnterToSendViewport,
   shouldSendComposerMessage,
 } from "./composer-keyboard";
 
@@ -31,5 +33,23 @@ describe("stream composer keyboard shortcuts", () => {
 
   it("ignores keys other than Enter", () => {
     expect(shouldSendComposerMessage(enterKey({ key: "a" }))).toBe(false);
+  });
+});
+
+describe("Enter-to-send viewport gate", () => {
+  it("enables Enter-to-send on the desktop composer layout", () => {
+    expect(
+      isEnterToSendViewport((query) => ({
+        matches: query === DESKTOP_COMPOSER_QUERY,
+      })),
+    ).toBe(true);
+  });
+
+  it("keeps Enter as a newline on mobile layouts", () => {
+    expect(isEnterToSendViewport(() => ({ matches: false }))).toBe(false);
+  });
+
+  it("defaults to desktop behavior without matchMedia", () => {
+    expect(isEnterToSendViewport(undefined)).toBe(true);
   });
 });

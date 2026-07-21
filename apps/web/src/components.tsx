@@ -5,7 +5,7 @@ import type { BlockMessage, BlockReference, DryvreBlock, SearchFilters, TaskStat
 import { blockSummary, blockTitle, descendantsOf, headingMarkdown } from './model';
 import { BlockEditor, type EditorSaveResult } from './block-editor';
 import { api } from './api';
-import { shouldSendComposerMessage } from './composer-keyboard';
+import { isEnterToSendViewport, shouldSendComposerMessage } from './composer-keyboard';
 
 const statusLabels: Record<TaskStatus, string> = { todo: 'To do', in_progress: 'In progress', blocked: 'Blocked', done: 'Done' };
 
@@ -320,6 +320,8 @@ export function StreamComposer({ selected, agents, target, live, liveMessage, co
   return <div className="composer stream-composer">
     <textarea value={value} placeholder="Write to this block… Use @ to mention people, agents, or blocks" onChange={(event) => setValue(event.target.value)} onKeyDown={(event) => {
       if (!shouldSendComposerMessage({ key: event.key, shiftKey: event.shiftKey, isComposing: event.nativeEvent.isComposing, keyCode: event.nativeEvent.keyCode })) return;
+      // Mobile soft keyboards have no Shift+Enter, so keep Enter as a newline there and let the send button submit.
+      if (!isEnterToSendViewport()) return;
       event.preventDefault();
       void send();
     }} />
