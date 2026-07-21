@@ -155,7 +155,8 @@ export function createAgentEventRuntime(
 
   function contractNeedsInput(context: string) {
     const required = ['Deliverable:', 'Completion criteria:', 'Constraints:', 'Verification:', '@Developer Agent'];
-    const unresolvedApproval = /\*\*Public URL approval:\*\*\s*TBD/i.test(context) && !/\b(?:approved|approve|yes|allow|proceed)\b/i.test(context);
+    const approvalField = context.match(/\*\*Public URL approval:\*\*\s*([^\n]+)/i)?.[1] ?? '';
+    const unresolvedApproval = Boolean(approvalField) && !isAffirmativeApproval(context);
     return unresolvedApproval || required.some((field) => !context.includes(field));
   }
 
