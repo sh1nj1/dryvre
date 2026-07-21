@@ -12,6 +12,7 @@ Dryvre is a single tree of first-class Markdown blocks, rendered as a document, 
 - [Development database and E2E tests](docs/development-database.md)
 - [Hackathon MVP scope](docs/hackathon-scope.md)
 - [OpenAI Build Week guide](docs/build-week.md)
+- [Not implemented backlog](docs/not-implemented/README.md)
 
 ## Stack
 
