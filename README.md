@@ -9,6 +9,7 @@ Dryvre is a single tree of first-class Markdown blocks, rendered as a document, 
 - [UI rules](docs/ui-rules.md)
 - [Block editor specification](docs/editor-spec.md)
 - [Architecture](docs/architecture.md)
+- [Development database and E2E tests](docs/development-database.md)
 - [Hackathon MVP scope](docs/hackathon-scope.md)
 - [OpenAI Build Week guide](docs/build-week.md)
 
@@ -23,15 +24,15 @@ Dryvre is a single tree of first-class Markdown blocks, rendered as a document, 
 
 ## Run locally
 
-Requirements: Node.js 22+, npm 10+, Docker.
+Requirements: Node.js 22+, npm 10+. Docker is required when local PostgreSQL is unavailable and for E2E tests.
 
 ```bash
 cp .env.example .env
-docker compose up -d postgres
 npm install
-npm run db:migrate
 npm run dev
 ```
+
+`npm run dev` uses the PostgreSQL host and port configured by `DATABASE_URL` when available (defaulting to `localhost:5432`). Otherwise it starts an ephemeral PostgreSQL 17 instance with Testcontainers and applies migrations automatically. See the [database guide](docs/development-database.md) for the local `psql` initialization command, forced modes, and E2E workflow.
 
 Open <http://localhost:5173>. Development uses the seeded `builder` identity; production requires a valid database-backed session cookie.
 
@@ -45,6 +46,7 @@ Configure `OPENAI_API_KEY` to enable the AI composer. `OPENAI_MODEL` defaults to
 npm run dev          # Fastify and Vite with reload
 npm run typecheck    # all workspace type checks
 npm test             # shared contract tests
+npm run test:e2e     # real PostgreSQL + HTTP/WebSocket tests via Testcontainers
 npm run lint
 npm run build        # production server, SPA, and MCP artifacts
 npm start            # serve API + built SPA on port 3000
