@@ -7,12 +7,14 @@ import argparse
 import codecs
 import hashlib
 import json
+import math
 import re
 import shutil
 import stat
 import subprocess
 import sys
 import tarfile
+import tempfile
 import zipfile
 from pathlib import Path, PurePosixPath
 
@@ -20,7 +22,8 @@ SECRET_PATH = re.compile(
     r"(^|/)(\.env(?:$|\.(?!(?:example|sample|template|dist)$)[^/]+$)|"
     r"id_rsa|id_ed25519|.*\.(pem|p12)|"
     r"(?:private|secret|server|client|tls|ssl)[^/]*\.key$|cookies?\.json$|"
-    r"\.npmrc$|\.yarnrc(?:\.yml)?$|\.pypirc$|\.netrc$|pip\.conf$|auth\.toml$|credentials\.toml$)",
+    r"client_secret[^/]*\.json$|\.npmrc$|\.yarnrc(?:\.yml)?$|\.pypirc$|\.netrc$|"
+    r"pip\.conf$|auth\.toml$|credentials\.toml$)",
     re.I,
 )
 FORBIDDEN_PATH = re.compile(
@@ -33,6 +36,7 @@ SECRET_TEXT = re.compile(
     r"(-----BEGIN (?:[A-Z0-9]+(?: [A-Z0-9]+)* )?PRIVATE KEY-----|"
     r"(?:OPENAI|ANTHROPIC|AWS_SECRET_ACCESS|GITHUB|GH|STRIPE)_[A-Z0-9_]*\s*[=:]\s*['\"]?[A-Za-z0-9_\-/+=]{16,}|"
     r"(?:_auth|_authToken|npmAuthToken)\s*[=:]\s*['\"]?[A-Za-z0-9_\-/+=]{8,}|"
+    r"(?:client_secret|clientSecret)['\"]?\s*[=:]\s*['\"]?[A-Za-z0-9_.\-/+=]{8,}|"
     r"[a-z][a-z0-9+.-]*://[^/\s:@]+:[^/\s@]+@[^\s'\"<>]+)",
     re.I,
 )
@@ -87,11 +91,7 @@ def scan_text_stream(stream, location: str, errors: list[str], warnings: list[st
         errors.append(f"database dump content in: {location}")
 
 
-def has_srt_cue(path: Path) -> bool:
-    try:
-        text = path.read_text(encoding="utf-8")
-    except UnicodeDecodeError:
-        return False
+def has_srt_text(text: str) -> bool:
     for block in re.split(r"\r?\n\s*\r?\n", text.strip()):
         lines = block.splitlines()
         if (
@@ -102,6 +102,46 @@ def has_srt_cue(path: Path) -> bool:
         ):
             return True
     return False
+
+
+def has_srt_cue(path: Path) -> bool:
+    try:
+        return has_srt_text(path.read_text(encoding="utf-8"))
+    except UnicodeDecodeError:
+        return False
+
+
+def probe_video(
+    path: Path, location: str, max_video_seconds: float | None, errors: list[str]
+) -> None:
+    if not shutil.which("ffprobe"):
+        errors.append(f"cannot inspect video without ffprobe: {location}")
+        return
+    probe = subprocess.run([
+        "ffprobe", "-v", "error", "-show_entries", "format=duration",
+        "-of", "default=noprint_wrappers=1:nokey=1", str(path),
+    ], capture_output=True, text=True)
+    if probe.returncode != 0:
+        errors.append(f"unreadable video: {location}")
+        return
+    try:
+        duration = float(probe.stdout.strip())
+    except ValueError:
+        errors.append(f"unreadable video duration: {location}")
+        return
+    if not math.isfinite(duration) or duration <= 0:
+        errors.append(f"empty video: {location}")
+    if max_video_seconds is not None and duration > max_video_seconds:
+        errors.append(f"video exceeds {max_video_seconds}s ({duration:.2f}s): {location}")
+
+
+def probe_video_stream(
+    stream, location: str, max_video_seconds: float | None, errors: list[str]
+) -> None:
+    with tempfile.NamedTemporaryFile(suffix=".mp4") as temporary:
+        shutil.copyfileobj(stream, temporary)
+        temporary.flush()
+        probe_video(Path(temporary.name), location, max_video_seconds, errors)
 
 
 def archive_kind(name: str) -> str | None:
@@ -115,7 +155,15 @@ def archive_kind(name: str) -> str | None:
     return None
 
 
-def inspect_zip(path: Path, relative: str, errors: list[str], warnings: list[str]) -> None:
+def inspect_zip(
+    path: Path,
+    relative: str,
+    errors: list[str],
+    warnings: list[str],
+    max_video_seconds: float | None = None,
+) -> tuple[int, int]:
+    video_count = 0
+    caption_count = 0
     try:
         with zipfile.ZipFile(path) as archive:
             for member in archive.infolist():
@@ -142,11 +190,34 @@ def inspect_zip(path: Path, relative: str, errors: list[str], warnings: list[str
                 if suffix not in BINARY_SUFFIXES:
                     with archive.open(member) as stream:
                         scan_text_stream(stream, location, errors, warnings)
+                if suffix == ".mp4":
+                    video_count += 1
+                    with archive.open(member) as stream:
+                        probe_video_stream(stream, location, max_video_seconds, errors)
+                elif suffix == ".srt":
+                    try:
+                        text = archive.read(member).decode("utf-8")
+                    except UnicodeDecodeError:
+                        errors.append(f"empty or malformed SRT captions: {location}")
+                    else:
+                        if has_srt_text(text):
+                            caption_count += 1
+                        else:
+                            errors.append(f"empty or malformed SRT captions: {location}")
     except (zipfile.BadZipFile, zipfile.LargeZipFile):
         errors.append(f"unreadable zip archive: {relative}")
+    return video_count, caption_count
 
 
-def inspect_tar(path: Path, relative: str, errors: list[str], warnings: list[str]) -> None:
+def inspect_tar(
+    path: Path,
+    relative: str,
+    errors: list[str],
+    warnings: list[str],
+    max_video_seconds: float | None = None,
+) -> tuple[int, int]:
+    video_count = 0
+    caption_count = 0
     try:
         with tarfile.open(path, "r:*") as archive:
             for member in archive.getmembers():
@@ -177,8 +248,32 @@ def inspect_tar(path: Path, relative: str, errors: list[str], warnings: list[str
                         continue
                     with stream:
                         scan_text_stream(stream, location, errors, warnings)
+                if suffix == ".mp4":
+                    video_count += 1
+                    stream = archive.extractfile(member)
+                    if stream is None:
+                        errors.append(f"archive member cannot be inspected: {location}")
+                    else:
+                        with stream:
+                            probe_video_stream(stream, location, max_video_seconds, errors)
+                elif suffix == ".srt":
+                    stream = archive.extractfile(member)
+                    if stream is None:
+                        errors.append(f"empty or malformed SRT captions: {location}")
+                    else:
+                        with stream:
+                            try:
+                                text = stream.read().decode("utf-8")
+                            except UnicodeDecodeError:
+                                errors.append(f"empty or malformed SRT captions: {location}")
+                            else:
+                                if has_srt_text(text):
+                                    caption_count += 1
+                                else:
+                                    errors.append(f"empty or malformed SRT captions: {location}")
     except tarfile.TarError:
         errors.append(f"unreadable tar archive: {relative}")
+    return video_count, caption_count
 
 
 def main() -> int:
@@ -229,9 +324,17 @@ def main() -> int:
             errors.append(f"secret-like file path: {relative}")
         kind = archive_kind(path.name)
         if kind == "zip":
-            inspect_zip(path, relative, errors, warnings)
+            videos, captions = inspect_zip(
+                path, relative, errors, warnings, args.max_video_seconds
+            )
+            video_count += videos
+            caption_count += captions
         elif kind == "tar":
-            inspect_tar(path, relative, errors, warnings)
+            videos, captions = inspect_tar(
+                path, relative, errors, warnings, args.max_video_seconds
+            )
+            video_count += videos
+            caption_count += captions
         elif kind == "unsupported":
             errors.append(f"unsupported archive format: {relative}")
         if kind is None and path.suffix.lower() not in BINARY_SUFFIXES:
@@ -239,21 +342,7 @@ def main() -> int:
                 scan_text_stream(stream, relative, errors, warnings)
         if path.suffix.lower() == ".mp4":
             video_count += 1
-            if not shutil.which("ffprobe"):
-                errors.append(f"cannot inspect video without ffprobe: {relative}")
-                continue
-            probe = subprocess.run([
-                "ffprobe", "-v", "error", "-show_entries", "format=duration",
-                "-of", "default=noprint_wrappers=1:nokey=1", str(path),
-            ], capture_output=True, text=True)
-            if probe.returncode != 0:
-                errors.append(f"unreadable video: {relative}")
-            else:
-                duration = float(probe.stdout.strip())
-                if duration <= 0:
-                    errors.append(f"empty video: {relative}")
-                if args.max_video_seconds and duration > args.max_video_seconds:
-                    errors.append(f"video exceeds {args.max_video_seconds}s ({duration:.2f}s): {relative}")
+            probe_video(path, relative, args.max_video_seconds, errors)
         elif path.suffix.lower() == ".srt":
             if has_srt_cue(path):
                 caption_count += 1

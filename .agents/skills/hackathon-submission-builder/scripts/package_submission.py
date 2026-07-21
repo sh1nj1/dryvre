@@ -18,7 +18,8 @@ FORBIDDEN_SOURCE_PATH = re.compile(
     r"\.env(?:$|\.(?!(?:example|sample|template|dist)$)[^/]+$)|"
     r"id_rsa|id_ed25519|.*\.(pem|p12)|"
     r"(?:private|secret|server|client|tls|ssl)[^/]*\.key$|"
-    r"cookies?\.json$|\.npmrc$|\.yarnrc(?:\.yml)?$|\.pypirc$|\.netrc$|pip\.conf$|"
+    r"cookies?\.json$|client_secret[^/]*\.json$|\.npmrc$|\.yarnrc(?:\.yml)?$|"
+    r"\.pypirc$|\.netrc$|pip\.conf$|"
     r"auth\.toml$|credentials\.toml$|[^/]+\.(?:db|sqlite|sqlite3)(?:-(?:wal|shm|journal))?$|"
     r"[^/]*(?:dump|backup)[^/]*\.sql$)",
     re.I,
