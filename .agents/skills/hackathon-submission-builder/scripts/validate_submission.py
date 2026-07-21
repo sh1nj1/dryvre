@@ -13,6 +13,7 @@ import sys
 from pathlib import Path
 
 SECRET_PATH = re.compile(r"(^|/)(\.env($|\.)|id_rsa|id_ed25519|.*\.(pem|key|p12)|cookies?\.json$)", re.I)
+FORBIDDEN_PATH = re.compile(r"(^|/)node_modules(/|$)", re.I)
 SECRET_TEXT = re.compile(
     r"(-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----|"
     r"(?:OPENAI|ANTHROPIC|AWS_SECRET_ACCESS|GITHUB|GH|STRIPE)_[A-Z0-9_]*\s*[=:]\s*['\"]?[A-Za-z0-9_\-/+=]{16,})",
@@ -70,6 +71,8 @@ def main() -> int:
         if not path.is_file():
             continue
         relative = path.relative_to(root).as_posix()
+        if FORBIDDEN_PATH.search(relative):
+            errors.append(f"forbidden packaged path: {relative}")
         if SECRET_PATH.search(relative):
             errors.append(f"secret-like file path: {relative}")
         if path.stat().st_size <= 2_000_000 and path.suffix.lower() not in {".png", ".jpg", ".jpeg", ".gif", ".pdf", ".mp4", ".webm", ".zip"}:
