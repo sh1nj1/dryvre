@@ -16,13 +16,19 @@ import tarfile
 import zipfile
 from pathlib import Path, PurePosixPath
 
-SECRET_PATH = re.compile(r"(^|/)(\.env($|\.)|id_rsa|id_ed25519|.*\.(pem|key|p12)|cookies?\.json$)", re.I)
+SECRET_PATH = re.compile(
+    r"(^|/)(\.env($|\.)|id_rsa|id_ed25519|.*\.(pem|key|p12)|cookies?\.json$|"
+    r"\.npmrc$|\.yarnrc(?:\.yml)?$|\.pypirc$|\.netrc$|pip\.conf$|auth\.toml$|credentials\.toml$)",
+    re.I,
+)
 FORBIDDEN_PATH = re.compile(
     r"((^|/)node_modules(/|$)|(^|/)[^/]+\.(?:db|sqlite|sqlite3)(?:-(?:wal|shm))?$)", re.I
 )
 SECRET_TEXT = re.compile(
     r"(-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----|"
-    r"(?:OPENAI|ANTHROPIC|AWS_SECRET_ACCESS|GITHUB|GH|STRIPE)_[A-Z0-9_]*\s*[=:]\s*['\"]?[A-Za-z0-9_\-/+=]{16,})",
+    r"(?:OPENAI|ANTHROPIC|AWS_SECRET_ACCESS|GITHUB|GH|STRIPE)_[A-Z0-9_]*\s*[=:]\s*['\"]?[A-Za-z0-9_\-/+=]{16,}|"
+    r"(?:_auth|_authToken|npmAuthToken)\s*[=:]\s*['\"]?[A-Za-z0-9_\-/+=]{8,}|"
+    r"[a-z][a-z0-9+.-]*://[^/\s:@]+:[^/\s@]+@[^\s'\"<>]+)",
     re.I,
 )
 SRT_TIMING = re.compile(
