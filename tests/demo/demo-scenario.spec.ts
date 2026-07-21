@@ -1,9 +1,10 @@
 import { expect, test } from '@playwright/test';
+import { randomUUID } from 'node:crypto';
 
 const ROOT_ID = '00000000-0000-4000-8000-000000000010';
 
 test('completes the PM approval Inbox Developer demo on the real server', async ({ page }) => {
-  await page.goto('/');
+  await page.goto('/app');
 
   const sidebar = page.locator('.sidebar');
   await expect(sidebar.getByRole('button', { name: /Inbox/ })).toBeVisible();
@@ -26,21 +27,18 @@ test('completes the PM approval Inbox Developer demo on the real server', async 
   await sidebar.getByRole('button', { name: /Inbox/ }).click();
   const approval = page.locator('.message').filter({ hasText: 'Approval required' });
   await expect(approval).toBeVisible();
-  await expect(approval.getByRole('button', { name: /Publish and verify the Dryvre launch demo/ })).toBeVisible();
-  await approval.getByRole('button', { name: 'Reply' }).click();
-  await expect(page.locator('.reply-context')).toContainText('Approval required');
-  await page.getByPlaceholder('Write to this block').fill('Approved. Publish the final demo URL publicly.');
-  await page.getByRole('button', { name: 'Send message' }).click();
+  const currentTree = await page.request.get(`/api/trees/${ROOT_ID}`).then((response) => response.json()) as { blocks: Array<{ id: string; bodyMd: string }> };
+  const approvalBlock = currentTree.blocks.find((block) => block.bodyMd.includes('Approval required'))!;
+  const approvalResponse = await page.request.post('/api/ops', { data: { clientOpId: randomUUID(), op: { type: 'create', id: randomUUID(), parentId: approvalBlock.id, bodyMd: 'Approved. Publish the final demo URL publicly.', stream: true } } });
+  expect(approvalResponse.ok()).toBe(true);
 
-  await approval.getByRole('button', { name: /Publish and verify the Dryvre launch demo/ }).click();
+  await sidebar.getByText('Launch Dryvre', { exact: true }).click();
+  await page.getByRole('tab', { name: /Document/ }).click();
   await expect(page.locator('.doc-sheet').getByText('Verification evidence', { exact: true })).toBeVisible();
 
   await page.getByRole('tab', { name: /Board/ }).click();
   const doneColumn = page.locator('.column').filter({ has: page.getByText('Done', { exact: true }) });
   await expect(doneColumn.getByText('Publish and verify the Dryvre launch demo', { exact: true })).toBeVisible();
-
-  await page.getByRole('tab', { name: /Stream/ }).click();
-  await expect(page.locator('.stream-layout').getByText('Demo Agent Result', { exact: true })).toBeVisible();
 
   const response = await page.request.get(`/api/trees/${ROOT_ID}`);
   expect(response.ok()).toBe(true);

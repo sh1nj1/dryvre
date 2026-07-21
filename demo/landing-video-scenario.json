@@ -1,0 +1,88 @@
+{
+  "name": "Dryvre landing product walkthrough",
+  "startPath": "/app",
+  "viewport": { "width": 1440, "height": 900 },
+  "defaultPauseMs": 650,
+  "steps": [
+    {
+      "action": "waitFor",
+      "selector": ".doc-sheet",
+      "subtitle": "Dryvre brings documents, work, conversations, and AI output into one block tree.",
+      "pauseAfterMs": 6800
+    },
+    {
+      "action": "assertText",
+      "selector": ".doc-sheet",
+      "text": "A calmer place to move work forward"
+    },
+    {
+      "action": "click",
+      "selector": ".view-switcher button:nth-child(2)",
+      "subtitle": "Switch the view, and the same blocks become an execution board. Nothing is copied or converted.",
+      "pauseAfterMs": 7200
+    },
+    {
+      "action": "assertText",
+      "selector": ".board",
+      "text": "Record the three-minute product story"
+    },
+    {
+      "action": "hover",
+      "selector": "select[aria-label='Change status for Record the three-minute product story']",
+      "subtitle": "A missing public approval keeps this task Blocked instead of letting an agent guess.",
+      "pauseAfterMs": 6200
+    },
+    {
+      "action": "select",
+      "selector": "select[aria-label='Change status for Record the three-minute product story']",
+      "value": "todo",
+      "subtitle": "When a human answers, the same task returns to To do and the loop can resume.",
+      "pauseAfterMs": 6200
+    },
+    {
+      "action": "select",
+      "selector": "select[aria-label='Change status for Record the three-minute product story']",
+      "value": "in_progress",
+      "subtitle": "The agent claims approved work as In progress, with its contract and context still attached.",
+      "pauseAfterMs": 6500
+    },
+    {
+      "action": "select",
+      "selector": "select[aria-label='Change status for Record the three-minute product story']",
+      "value": "done",
+      "subtitle": "Only verified work, recorded with evidence, moves to Done.",
+      "pauseAfterMs": 5800
+    },
+    {
+      "action": "click",
+      "selector": "article.card:has(select[aria-label='Change status for Record the three-minute product story'])",
+      "pauseAfterMs": 800
+    },
+    {
+      "action": "click",
+      "selector": ".view-switcher button:nth-child(3)",
+      "subtitle": "In Stream, people and AI discuss that exact block, and agent output writes back as editable children.",
+      "pauseAfterMs": 7200
+    },
+    {
+      "action": "assertText",
+      "selector": ".stream-layout",
+      "text": "All launch checks passed"
+    },
+    {
+      "action": "goto",
+      "path": "/",
+      "subtitle": "Humans set intent. Agents close the loop.",
+      "pauseAfterMs": 6000
+    },
+    {
+      "action": "assertText",
+      "selector": ".landing-hero",
+      "text": "One tree"
+    },
+    {
+      "action": "screenshot",
+      "name": "dryvre-landing-hero"
+    }
+  ]
+}

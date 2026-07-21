@@ -171,6 +171,20 @@ describe('Dryvre API with PostgreSQL', () => {
         type: 'create',
         id: randomUUID(),
         parentId: request!.id,
+        bodyMd: 'No, do not publish the final demo URL.',
+        stream: true,
+      },
+    })).resolves.toHaveProperty('status', 200);
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    const denied = await fetch(`${origin}/api/trees/${ROOT_ID}`).then((result) => result.json()) as TreeResponse;
+    expect(denied.blocks).toContainEqual(expect.objectContaining({ id: task.id, status: 'blocked' }));
+
+    await expect(post('/api/ops', {
+      clientOpId: randomUUID(),
+      op: {
+        type: 'create',
+        id: randomUUID(),
+        parentId: request!.id,
         bodyMd: 'Approved. Publish the final demo URL publicly.',
         stream: true,
       },

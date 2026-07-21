@@ -218,18 +218,17 @@ main { min-width: 0; min-height: 0; display: flex; flex-direction: column; backg
 .primary-btn { height: 32px; margin-left: auto; padding: 0 12px; border: 0; color: white; background: var(--ink); font-size: 9px; font-weight: 700; }
 
 
-.agent-composer { margin-top: 9px; }
-.agent-readiness { margin-bottom: 7px; padding: 7px 8px; border: 1px solid var(--line); border-radius: 7px; display: flex; align-items: center; gap: 6px; color: var(--muted); background: var(--panel); font-size: 9px; }
+.agent-composer-status { margin: 0 4px 9px; }
+.agent-readiness { padding: 7px 8px; border: 1px solid var(--line); border-radius: 7px; display: flex; align-items: center; gap: 6px; color: var(--muted); background: #faf8f2; font-size: 9px; }
 .agent-readiness i { width: 7px; height: 7px; border-radius: 50%; background: #aaa; }
 .agent-readiness.ready i { background: #5d9364; }
 .agent-readiness.not-ready i { background: #bd694f; }
+.agent-readiness span { margin-left: auto; }
 .agent-readiness small { display: block; color: #a4543d; }
-.agent-toolbar { display: flex; align-items: center; gap: 8px; }
-.agent-toolbar select { min-width: 0; flex: 1; padding: 7px; border: 1px solid var(--line); border-radius: 7px; background: var(--panel); font-size: 10px; }
-.agent-toolbar span { color: var(--muted); font-size: 9px; }
-.agent-target { margin-top: 7px; display: flex; align-items: center; gap: 7px; color: var(--muted); font-size: 9px; }
-.agent-target select { min-width: 0; flex: 1; padding: 6px; border: 1px solid var(--line); border-radius: 7px; background: var(--panel); font-size: 9px; }
-.agent-composer .composer { position: static; margin-top: 7px; }
+.composer-mode { margin-left: auto; max-width: 150px; height: 31px; padding: 0 8px; border: 1px solid var(--line); border-radius: 8px; color: var(--ink); background: #faf8f2; font-size: 10px; }
+.composer-mode + .send-btn { margin-left: 0; }
+.agent-run-btn { min-width: 52px; height: 31px; padding: 0 10px; border: 0; border-radius: 8px; color: white; background: var(--ink); font-size: 10px; }
+.agent-run-btn:disabled { opacity: .35; }
 .run-state { margin-top: 7px; display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 10px; }
 .run-state i { width: 7px; height: 7px; border-radius: 50%; background: #aaa; }
 .run-running i, .run-queued i { background: var(--yellow); animation: pulse 1s infinite alternate; }

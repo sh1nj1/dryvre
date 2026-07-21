@@ -22,7 +22,7 @@ import { applyOperation, applyOperationInTransaction } from './block-service.js'
 import type { LivePublisher } from './live.js';
 
 type AppliedOperation = { sequence: number; op: BlockOp };
-type TriggerDefinition = {
+export type TriggerDefinition = {
   agentBlockId: string;
   triggerBlockId: string;
   trigger: AgentTrigger;
@@ -45,6 +45,29 @@ function serializeBlock(row: typeof blocks.$inferSelect): Block {
 
 const delay = (milliseconds: number) => new Promise((resolve) => setTimeout(resolve, milliseconds));
 const mentions = (body: string, name: string) => body.toLocaleLowerCase().includes(`@${name}`.toLocaleLowerCase());
+
+export function isAffirmativeApproval(body: string) {
+  const negative = /\b(?:no|not|never|deny|denied|reject|rejected|decline|declined|don't|do not|cannot|can't)\b|(?:아니|거절|반대|하지\s*마|승인하지)/i;
+  const affirmative = /\b(?:yes|approve|approved|allow|allowed|go ahead|proceed|publish publicly)\b|(?:승인|좋아|진행|공개해)/i;
+  return affirmative.test(body) && !negative.test(body);
+}
+
+export function collectAgentTriggers(allBlocks: Block[]) {
+  const definitions: TriggerDefinition[] = [];
+  for (const agent of allBlocks.filter((block) => parseBlockDirective(block.bodyMd)?.kind === 'agent')) {
+    for (const child of allBlocks.filter((block) => block.parentId === agent.id)) {
+      try {
+        for (const { blockId, trigger } of parseAgentTriggers(agent, [child])) {
+          definitions.push({ agentBlockId: agent.id, triggerBlockId: blockId, trigger });
+        }
+      } catch {
+        // Editable trigger blocks are isolated so one invalid definition cannot
+        // disable unrelated subscriptions or reject the event dispatcher.
+      }
+    }
+  }
+  return definitions;
+}
 
 async function waitForRun(runtime: AgentRuntime, runId: string, isClosed: () => boolean) {
   while (!isClosed()) {
@@ -70,20 +93,15 @@ export function createAgentEventRuntime(
   });
 
   const schedule = (task: Promise<void>) => {
-    work.add(task);
-    void task.finally(() => work.delete(task));
+    const contained = task.catch(() => undefined);
+    work.add(contained);
+    void contained.finally(() => work.delete(contained));
   };
 
   async function loadTriggers() {
     const rows = await db.select().from(blocks);
     const allBlocks = sortBlocksInDocumentOrder(rows.map(serializeBlock));
-    return allBlocks
-      .filter((block) => parseBlockDirective(block.bodyMd)?.kind === 'agent')
-      .flatMap((agent) => parseAgentTriggers(agent, allBlocks).map(({ blockId, trigger }) => ({
-        agentBlockId: agent.id,
-        triggerBlockId: blockId,
-        trigger,
-      })));
+    return collectAgentTriggers(allBlocks);
   }
 
   async function updateDelivery(definition: TriggerDefinition, operation: AppliedOperation, status: 'completed' | 'failed', error?: string) {
@@ -225,15 +243,16 @@ export function createAgentEventRuntime(
     });
     emit(claimed);
     let run: AgentRun | null = null;
+    let startedRun: AgentRun | null = null;
     try {
-      const started = await agentRuntime.start({
+      startedRun = await agentRuntime.start({
         agentBlockId: definition.agentBlockId,
         targetBlockId: taskBlockId,
         prompt,
         resume: true,
       }, requestedBy);
-      await db.update(agentLoops).set({ agentRunId: started.id, updatedAt: new Date() }).where(eq(agentLoops.id, loopId));
-      run = await waitForRun(agentRuntime, started.id, () => closed);
+      await db.update(agentLoops).set({ agentRunId: startedRun.id, updatedAt: new Date() }).where(eq(agentLoops.id, loopId));
+      run = await waitForRun(agentRuntime, startedRun.id, () => closed);
       if (run?.status !== 'succeeded') throw new Error(run?.errorCode ?? 'developer_agent_failed');
       const task = await db.query.blocks.findFirst({ where: eq(blocks.id, taskBlockId) });
       if (!task) throw new Error('Task disappeared before verification');
@@ -264,6 +283,15 @@ export function createAgentEventRuntime(
       });
       emissions.forEach(emit);
     } catch (error) {
+      if (!startedRun) {
+        try {
+          const restored = await applyOperation(db, {
+            clientOpId: randomUUID(),
+            op: { type: 'setStatus', id: taskBlockId, status: 'todo', version: version + 1 },
+          }, agentAuthorId);
+          emit(restored);
+        } catch { /* a concurrent task change wins over automatic restoration */ }
+      }
       await db.update(agentLoops).set({ state: 'failed', updatedAt: new Date() }).where(eq(agentLoops.id, loopId));
       throw error;
     }
@@ -277,6 +305,10 @@ export function createAgentEventRuntime(
       eq(agentLoops.requestedBy, actorId),
     ));
     for (const loop of loops) {
+      const request = loop.requestBlockId
+        ? await db.query.blocks.findFirst({ where: eq(blocks.id, loop.requestBlockId) })
+        : null;
+      if (/^## Approval required\b/i.test(request?.bodyMd ?? '') && !isAffirmativeApproval(source.bodyMd)) continue;
       const task = await db.query.blocks.findFirst({ where: eq(blocks.id, loop.taskBlockId) });
       if (!task || task.status !== 'blocked') continue;
       const agentAuthorId = await agentRuntime.subjectFor(loop.agentBlockId);

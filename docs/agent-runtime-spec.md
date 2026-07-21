@@ -235,7 +235,7 @@ Agent별 managed Codex home은 `<data>/agent-runtime/<agent-block-id>/codex-home
 
 - `@agent` 블록: 작은 Agent 배지, Run 버튼, 연결된 Skill 수, 마지막 실행 상태
 - `@skill` 블록: Skill 배지와 compile validation 상태
-- 대상 블록의 AI composer: Agent picker, prompt, Run/Cancel
+- 대상 블록의 스트림 composer: 일반 메시지와 Agent picker가 하나의 prompt 입력을 공유하고 Agent 실행 시 Run/Cancel 제공
 - 스트림: 사용자 요청, 실행 중 상태, 최종 Agent 결과를 같은 블록 문맥에서 표시
 - 오류: Codex 미설치, 로그인 필요, invalid Skill, busy, timeout을 각각 실행 가능한 문구로 표시
 - readiness: fake/real runner, Codex 로그인과 managed MCP build 상태를 실행 전에 표시

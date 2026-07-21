@@ -139,24 +139,20 @@ export function BoardView({ blocks, messages, selectedId, onSelect, onStatus }: 
   })}</div>;
 }
 
-export function StreamView({ selected, messages, blocks, focusedMessageId, onReference, onSend }: { selected: DryvreBlock; messages: BlockMessage[]; blocks?: DryvreBlock[]; focusedMessageId: string | undefined; onReference?: (id: string) => void; onSend: (body: string, parentId?: string) => void }) {
-  const [value, setValue] = useState('');
-  const [replyToId, setReplyToId] = useState<string>();
+export function StreamView({ selected, messages, focusedMessageId, agents, agentTarget, live, liveMessage, onSend, onAgentSent }: { selected: DryvreBlock; messages: BlockMessage[]; focusedMessageId: string | undefined; agents: Block[]; agentTarget: Block | undefined; live: boolean; liveMessage: WsServerMessage | undefined; onSend: (body: string) => void; onAgentSent: (targetId: string, resultBlockId?: string) => void }) {
   const focusedMessage = useRef<HTMLElement>(null);
   useEffect(() => { focusedMessage.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }); }, [focusedMessageId, messages]);
-  const send = () => { if (!value.trim()) return; onSend(value.trim(), replyToId); setValue(''); setReplyToId(undefined); };
   return <div className="stream-layout">
-    {messages.length ? messages.map((message) => <article ref={message.id === focusedMessageId ? focusedMessage : undefined} className={`message ${message.agent ? 'agent' : ''} ${message.id === focusedMessageId ? 'result-focus' : ''}`} key={message.id}><div className="avatar">{message.initials}</div><div><div className="message-head"><strong>{message.author}</strong><span>{message.timeLabel}</span></div><div className="message-body"><ReactMarkdown>{message.body}</ReactMarkdown>{message.referenceIds?.map((id) => <button className="message-reference" key={id} onClick={() => onReference?.(id)}>↗ {blocks?.find((block) => block.id === id)?.title ?? 'Original task'}</button>)}{message.createdBlocks && <div className="agent-output">{message.createdBlocks.map((body) => <div className="agent-block" key={body}>{body}</div>)}</div>}</div><div className="message-actions"><button onClick={() => setReplyToId(message.id)}>Reply</button><span> · Reference · •••</span></div></div></article>) : <div className="empty-stream"><strong>No messages yet</strong><span>Start a conversation in this block.</span></div>}
-    <div className="composer">{replyToId && <div className="reply-context"><span>Replying to {messages.find((message) => message.id === replyToId)?.body.replace(/^#+\s*/, '').split('\n')[0] ?? 'request'}</span><button aria-label="Cancel reply" onClick={() => setReplyToId(undefined)}>×</button></div>}<textarea value={value} onChange={(event) => setValue(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) send(); }} placeholder="Write to this block… Use @ to mention people, agents, or blocks" /><div className="composer-actions"><span className="context-chip">◎ {selected.title}</span><button className="tool-pill">@ Reference</button><button className="send-btn" aria-label="Send message" disabled={!value.trim()} onClick={send}>↑</button></div></div>
+    {messages.length ? messages.map((message) => <article ref={message.id === focusedMessageId ? focusedMessage : undefined} className={`message ${message.agent ? 'agent' : ''} ${message.id === focusedMessageId ? 'result-focus' : ''}`} key={message.id}><div className="avatar">{message.initials}</div><div><div className="message-head"><strong>{message.author}</strong><span>{message.timeLabel}</span></div><div className="message-body"><p>{message.body}</p>{message.createdBlocks && <div className="agent-output">{message.createdBlocks.map((body) => <div className="agent-block" key={body}>{body}</div>)}</div>}</div><div className="message-actions">Reply · Reference · •••</div></div></article>) : <div className="empty-stream"><strong>No messages yet</strong><span>Start a conversation in this block.</span></div>}
+    <StreamComposer selected={selected} agents={agents} target={agentTarget} live={live} liveMessage={liveMessage} onSend={onSend} onSent={onAgentSent} />
   </div>;
 }
 
-export function ContextRail({ selected, path, blocks, references, messages, agents, agentTargets, live, liveMessage, onAgentSent, onOpenStream }: { selected: DryvreBlock; path: DryvreBlock[]; blocks: DryvreBlock[]; references: BlockReference[]; messages: BlockMessage[]; agents: Block[]; agentTargets: Block[]; live: boolean; liveMessage: WsServerMessage | undefined; onAgentSent: (targetId: string, resultBlockId?: string) => void; onOpenStream: () => void }) {
+export function ContextRail({ selected, path, blocks, references, messages, onOpenStream }: { selected: DryvreBlock; path: DryvreBlock[]; blocks: DryvreBlock[]; references: BlockReference[]; messages: BlockMessage[]; onOpenStream: () => void }) {
   const relevantRefs = references.filter((reference) => reference.fromId === selected.id);
   const descendants = descendantsOf(selected.id, blocks);
   return <aside className="context-rail"><header className="rail-head"><strong>Block context</strong><span>Auto-built</span></header><div className="rail-scroll"><div className="inspector-label">Selected block</div><div className="selected-card"><span className="path">{path.slice(0, -1).map((block) => block.title).join(' / ') || 'Root'}</span><h3>{selected.title}</h3><p>{selected.bodyMd ?? 'A first-class block in the shared tree.'}</p><div className="selected-meta">Updated {selected.updatedLabel} · {selected.author}</div></div>
     {messages.length > 0 && <button className="messages-card" onClick={onOpenStream}><span className="messages-icon">◉</span><span className="messages-copy"><strong>{messages.length} messages</strong><span>{[...new Set(messages.map((message) => message.author))].join(', ')}</span></span><span className="messages-arrow">→</span></button>}
-    <div className="inspector-label section-gap">Local Agents</div>{agents.length && agentTargets.length ? <AgentComposer agents={agents} targets={agentTargets} live={live} liveMessage={liveMessage} onSent={onAgentSent} /> : <p className="empty-copy">Connect the server tree to use local Agents.</p>}
     <div className="inspector-label section-gap">AI reads</div><ul className="context-list">{path.map((block, index) => <li className={`context-item ${block.id === selected.id ? 'current' : ''}`} key={block.id}>{block.title}<small>{block.id === selected.id ? `current block · ${descendants.length} descendants` : index === 0 ? `root · ${descendantsOf(block.id, blocks).length} descendant blocks` : 'parent block'}</small></li>)}</ul>
     <div className="inspector-label section-gap">References</div>{relevantRefs.length ? relevantRefs.map((reference) => { const target = blocks.find((block) => block.id === reference.toId); return target && <div className="reference-card" key={reference.toId}><strong>↗ {target.title}</strong><span>{reference.summary}</span></div>; }) : <p className="empty-copy">No explicit references.</p>}
   </div></aside>;
@@ -206,23 +202,22 @@ function agentError(value: string) {
   return agentErrors[value] ?? value.replaceAll('_', ' ');
 }
 
-export function AgentComposer({ agents, targets, live, liveMessage, onSent }: { agents: Block[]; targets: Block[]; live: boolean; liveMessage: WsServerMessage | undefined; onSent: (targetId: string, resultBlockId?: string) => void }) {
-  const [agentId, setAgentId] = useState(agents[0]?.id ?? '');
-  const [targetId, setTargetId] = useState(targets[0]?.id ?? '');
+export function StreamComposer({ selected, agents, target, live, liveMessage, onSend, onSent }: { selected: DryvreBlock; agents: Block[]; target: Block | undefined; live: boolean; liveMessage: WsServerMessage | undefined; onSend: (body: string) => void; onSent: (targetId: string, resultBlockId?: string) => void }) {
+  const [agentId, setAgentId] = useState('');
   const [value, setValue] = useState('');
   const [run, setRun] = useState<AgentRun>();
   const [skillNames, setSkillNames] = useState<string[]>([]);
   const [error, setError] = useState<string>();
   const [readiness, setReadiness] = useState<Awaited<ReturnType<typeof api.agentReadiness>>>();
   const runRef = useRef<AgentRun | undefined>(undefined);
-  const targetRef = useRef(targetId);
+  const targetRef = useRef<string | undefined>(undefined);
   const onSentRef = useRef(onSent);
   const completedRuns = useRef(new Set<string>());
   runRef.current = run;
-  targetRef.current = targetId;
   onSentRef.current = onSent;
 
   useEffect(() => {
+    if (!agents.length || !target) { setReadiness(undefined); return; }
     let active = true;
     void api.agentReadiness().then((next) => {
       if (active) setReadiness(next);
@@ -230,7 +225,7 @@ export function AgentComposer({ agents, targets, live, liveMessage, onSent }: { 
       if (active) setError(reason instanceof Error ? reason.message : 'Could not check Codex readiness');
     });
     return () => { active = false; };
-  }, []);
+  }, [agents.length, target]);
 
   useEffect(() => {
     const message = liveMessage;
@@ -244,17 +239,15 @@ export function AgentComposer({ agents, targets, live, liveMessage, onSent }: { 
     completedRuns.current.add(current.id);
     void api.agentRun(current.id).then((next) => {
       setRun(next);
-      onSentRef.current(targetRef.current, message.resultBlockId);
-    }).catch(() => onSentRef.current(targetRef.current, message.resultBlockId));
+      if (targetRef.current) onSentRef.current(targetRef.current, message.resultBlockId);
+    }).catch(() => { if (targetRef.current) onSentRef.current(targetRef.current, message.resultBlockId); });
   }, [liveMessage]);
 
   useEffect(() => {
-    if (!agents.some((agent) => agent.id === agentId)) setAgentId(agents[0]?.id ?? '');
-  }, [agentId, agents]);
-
-  useEffect(() => {
-    if (!targets.some((target) => target.id === targetId)) setTargetId(targets[0]?.id ?? '');
-  }, [targetId, targets]);
+    // Fall back to Message mode when the target is gone or the agent left the list,
+    // otherwise the mode <select> disappears and the composer stays stuck in Agent mode.
+    if (agentId && (!target || !agents.some((agent) => agent.id === agentId))) setAgentId('');
+  }, [agentId, agents, target]);
 
   useEffect(() => {
     if (!agentId) return;
@@ -273,19 +266,26 @@ export function AgentComposer({ agents, targets, live, liveMessage, onSent }: { 
       void api.agentRun(run.id).then((next) => {
         setRun(next);
         if (!['queued', 'running'].includes(next.status) && !completedRuns.current.has(next.id)) {
-          completedRuns.current.add(next.id);
-          onSent(targetId);
+	  completedRuns.current.add(next.id);
+	  if (targetRef.current) onSent(targetRef.current);
         }
       }).catch(() => undefined);
     }, live ? 2_000 : 800);
     return () => window.clearInterval(timer);
-  }, [live, onSent, run, targetId]);
+  }, [live, onSent, run, target]);
 
   async function send() {
-    if (!agentId || !targetId || !value.trim() || run && ['queued', 'running'].includes(run.status)) return;
+    if (!value.trim()) return;
+    if (!agentId) {
+      onSend(value.trim());
+      setValue('');
+      return;
+    }
+    if (!target || run && ['queued', 'running'].includes(run.status)) return;
     setError(undefined);
     try {
-      const next = await api.startAgentRun({ agentBlockId: agentId, targetBlockId: targetId, prompt: value, resume: true });
+      targetRef.current = target.id;
+      const next = await api.startAgentRun({ agentBlockId: agentId, targetBlockId: target.id, prompt: value, resume: true });
       completedRuns.current.delete(next.id);
       setRun(next);
       setValue('');
@@ -304,12 +304,14 @@ export function AgentComposer({ agents, targets, live, liveMessage, onSent }: { 
     : readiness.ready
       ? `${readiness.mode === 'fake' ? 'Demo runner' : readiness.version ?? 'Codex'} · ${readiness.mode === 'fake' ? 'deterministic' : 'Dryvre MCP ready'}`
       : 'Local Agent unavailable';
-  return <div className="agent-composer">
-    <div className={`agent-readiness ${readiness?.ready ? 'ready' : 'not-ready'}`}><i />{readinessLabel}{readiness?.error && <small>{agentError(readiness.error)}</small>}</div>
-    <div className="agent-toolbar"><select value={agentId} onChange={(event) => setAgentId(event.target.value)} disabled={Boolean(busy)}>{agents.map((agent) => <option value={agent.id} key={agent.id}>{(agent.bodyMd ?? '').match(/^#\s+@agent\s+([^\n]+)/)?.[1] ?? 'Agent'}</option>)}</select><span>{skillNames.length ? `${skillNames.length} skills` : 'No skills'}</span></div>
-    <label className="agent-target"><span>Target</span><select value={targetId} onChange={(event) => setTargetId(event.target.value)} disabled={Boolean(busy)}>{targets.map((target) => <option value={target.id} key={target.id}>{target.bodyMd.replace(/^#+\s*/, '').split('\n')[0] || 'Untitled block'}</option>)}</select></label>
-    <div className="composer"><textarea value={value} placeholder="Ask this local Codex Agent…" onChange={(event) => setValue(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); void send(); } }} /><button disabled={!readiness?.ready || Boolean(busy) || !value.trim() || !agentId || !targetId} onClick={() => void send()}>{busy ? 'Running' : 'Run'}</button></div>
-    {run && <div className={`run-state run-${run.status}`}><i />{runLabels[run.status]}{run.errorCode && <small>{agentError(run.errorCode)}</small>}{busy && <button onClick={() => void cancel()}>Cancel</button>}</div>}
-    {error && <div className="agent-error">{error}</div>}
+  const agentSelected = Boolean(agentId);
+  return <div className="composer stream-composer">
+    <textarea value={value} placeholder="Write to this block… Use @ to mention people, agents, or blocks" onChange={(event) => setValue(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) void send(); }} />
+    {(agentSelected || busy) && <div className="agent-composer-status">
+      {agentSelected && <div className={`agent-readiness ${readiness?.ready ? 'ready' : 'not-ready'}`}><i />{readinessLabel}<span>{skillNames.length ? `${skillNames.length} skills` : 'No skills'}</span>{readiness?.error && <small>{agentError(readiness.error)}</small>}</div>}
+      {run && <div className={`run-state run-${run.status}`}><i />{runLabels[run.status]}{run.errorCode && <small>{agentError(run.errorCode)}</small>}{busy && <button onClick={() => void cancel()}>Cancel</button>}</div>}
+      {error && <div className="agent-error">{error}</div>}
+    </div>}
+    <div className="composer-actions"><span className="context-chip">◎ {selected.title}</span><button className="tool-pill">@ Reference</button>{agents.length > 0 && target && <select className="composer-mode" aria-label="Send as" value={agentId} onChange={(event) => setAgentId(event.target.value)}><option value="">Message</option>{agents.map((agent) => <option value={agent.id} key={agent.id}>{(agent.bodyMd ?? '').match(/^#\s+@agent\s+([^\n]+)/)?.[1] ?? 'Agent'}</option>)}</select>}<button className={agentSelected ? 'agent-run-btn' : 'send-btn'} aria-label={agentSelected ? 'Run Agent' : 'Send message'} disabled={!value.trim() || (agentSelected && (Boolean(busy) || !readiness?.ready || !target))} onClick={() => void send()}>{agentSelected ? (busy ? 'Running' : 'Run') : '↑'}</button></div>
   </div>;
 }

@@ -22,6 +22,9 @@ export const mockMessages: BlockMessage[] = [
   { id: 'message-1', parentId: 'three-views', author: 'Soonoh', initials: 'SO', timeLabel: 'Today, 14:22', body: 'The demo should make the ontology obvious without explaining our database. Can we use one launch brief and watch it become work?' },
   { id: 'message-2', parentId: 'three-views', author: 'Mina Kim', initials: 'MK', timeLabel: '14:28', body: 'Yes. Keep the selected block fixed while switching views. That makes “same object, different lens” immediately visible.' },
   { id: 'message-3', parentId: 'three-views', author: 'Dryvre AI', initials: '✦', timeLabel: '14:31 · GPT-5.6', body: 'I read this subtree and the referenced Build Week criteria. Here is a concise demo sequence written back as child blocks:', agent: true, createdBlocks: ['Open in Document and establish the product thesis.', 'Switch to Board; move “Three views, one tree” to Done.', 'Return here and mention Dryvre AI to create the launch checklist.'] },
+  { id: 'message-4', parentId: 'record-story', author: 'Developer Agent', initials: 'DA', timeLabel: '14:34', body: 'The completion contract is missing approval to publish the demo URL, so I moved this task to Blocked and asked in your Inbox.', agent: true },
+  { id: 'message-5', parentId: 'record-story', author: 'Soonoh', initials: 'SO', timeLabel: '14:36', body: 'Approved. Publish the public demo URL.' },
+  { id: 'message-6', parentId: 'record-story', author: 'Developer Agent', initials: 'DA', timeLabel: '14:38', body: 'Approval received. I resumed the same task, ran its release checks, and recorded the evidence here:', agent: true, createdBlocks: ['Public demo URL responds with HTTP 200.', 'Video duration is verified under the three-minute limit.', 'All launch checks passed.'] },
 ];
 
 export const initialSnapshot: DryvreSnapshot = {
