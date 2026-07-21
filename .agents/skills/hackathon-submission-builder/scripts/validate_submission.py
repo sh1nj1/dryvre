@@ -12,11 +12,14 @@ import shutil
 import stat
 import subprocess
 import sys
+import tarfile
 import zipfile
 from pathlib import Path, PurePosixPath
 
 SECRET_PATH = re.compile(r"(^|/)(\.env($|\.)|id_rsa|id_ed25519|.*\.(pem|key|p12)|cookies?\.json$)", re.I)
-FORBIDDEN_PATH = re.compile(r"(^|/)node_modules(/|$)", re.I)
+FORBIDDEN_PATH = re.compile(
+    r"((^|/)node_modules(/|$)|(^|/)[^/]+\.(?:db|sqlite|sqlite3)(?:-(?:wal|shm))?$)", re.I
+)
 SECRET_TEXT = re.compile(
     r"(-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----|"
     r"(?:OPENAI|ANTHROPIC|AWS_SECRET_ACCESS|GITHUB|GH|STRIPE)_[A-Z0-9_]*\s*[=:]\s*['\"]?[A-Za-z0-9_\-/+=]{16,})",
@@ -26,6 +29,8 @@ SRT_TIMING = re.compile(
     r"\d{2}:\d{2}:\d{2},\d{3}\s+-->\s+\d{2}:\d{2}:\d{2},\d{3}(?:\s+.*)?"
 )
 BINARY_SUFFIXES = {".png", ".jpg", ".jpeg", ".gif", ".pdf", ".mp4", ".webm", ".zip"}
+TAR_SUFFIXES = (".tar", ".tar.gz", ".tgz", ".tar.bz2", ".tbz2", ".tar.xz", ".txz")
+UNSUPPORTED_ARCHIVE_SUFFIXES = (".gz", ".bz2", ".xz", ".zst", ".7z", ".rar")
 
 
 def sha256(path: Path) -> str:
@@ -81,6 +86,17 @@ def has_srt_cue(path: Path) -> bool:
     return False
 
 
+def archive_kind(name: str) -> str | None:
+    lower = name.lower()
+    if lower.endswith(".zip"):
+        return "zip"
+    if lower.endswith(TAR_SUFFIXES):
+        return "tar"
+    if lower.endswith(UNSUPPORTED_ARCHIVE_SUFFIXES):
+        return "unsupported"
+    return None
+
+
 def inspect_zip(path: Path, relative: str, errors: list[str], warnings: list[str]) -> None:
     try:
         with zipfile.ZipFile(path) as archive:
@@ -91,6 +107,7 @@ def inspect_zip(path: Path, relative: str, errors: list[str], warnings: list[str
                     errors.append(f"unsafe archive member path: {location}")
                 if stat.S_ISLNK(member.external_attr >> 16):
                     errors.append(f"symbolic link in archive: {location}")
+                    continue
                 if FORBIDDEN_PATH.search(member_name):
                     errors.append(f"forbidden archived path: {location}")
                 if SECRET_PATH.search(member_name):
@@ -98,7 +115,7 @@ def inspect_zip(path: Path, relative: str, errors: list[str], warnings: list[str
                 if member.is_dir():
                     continue
                 suffix = PurePosixPath(member_name).suffix.lower()
-                if suffix == ".zip":
+                if archive_kind(member_name):
                     errors.append(f"nested archive cannot be inspected: {location}")
                     continue
                 if member.flag_bits & 0x1:
@@ -109,6 +126,41 @@ def inspect_zip(path: Path, relative: str, errors: list[str], warnings: list[str
                         scan_text_stream(stream, location, errors, warnings)
     except (zipfile.BadZipFile, zipfile.LargeZipFile):
         errors.append(f"unreadable zip archive: {relative}")
+
+
+def inspect_tar(path: Path, relative: str, errors: list[str], warnings: list[str]) -> None:
+    try:
+        with tarfile.open(path, "r:*") as archive:
+            for member in archive.getmembers():
+                member_name = member.name.replace("\\", "/")
+                location = f"{relative}!/{member_name}"
+                if member_name.startswith("/") or ".." in PurePosixPath(member_name).parts:
+                    errors.append(f"unsafe archive member path: {location}")
+                if member.issym() or member.islnk():
+                    errors.append(f"link in archive: {location}")
+                    continue
+                if FORBIDDEN_PATH.search(member_name):
+                    errors.append(f"forbidden archived path: {location}")
+                if SECRET_PATH.search(member_name):
+                    errors.append(f"secret-like archived path: {location}")
+                if member.isdir():
+                    continue
+                if not member.isfile():
+                    errors.append(f"unsupported archive member: {location}")
+                    continue
+                if archive_kind(member_name):
+                    errors.append(f"nested archive cannot be inspected: {location}")
+                    continue
+                suffix = PurePosixPath(member_name).suffix.lower()
+                if suffix not in BINARY_SUFFIXES:
+                    stream = archive.extractfile(member)
+                    if stream is None:
+                        errors.append(f"archive member cannot be inspected: {location}")
+                        continue
+                    with stream:
+                        scan_text_stream(stream, location, errors, warnings)
+    except tarfile.TarError:
+        errors.append(f"unreadable tar archive: {relative}")
 
 
 def main() -> int:
@@ -157,9 +209,14 @@ def main() -> int:
             errors.append(f"forbidden packaged path: {relative}")
         if SECRET_PATH.search(relative):
             errors.append(f"secret-like file path: {relative}")
-        if path.suffix.lower() == ".zip":
+        kind = archive_kind(path.name)
+        if kind == "zip":
             inspect_zip(path, relative, errors, warnings)
-        if path.suffix.lower() not in BINARY_SUFFIXES:
+        elif kind == "tar":
+            inspect_tar(path, relative, errors, warnings)
+        elif kind == "unsupported":
+            errors.append(f"unsupported archive format: {relative}")
+        if kind is None and path.suffix.lower() not in BINARY_SUFFIXES:
             with path.open("rb") as stream:
                 scan_text_stream(stream, relative, errors, warnings)
         if path.suffix.lower() == ".mp4":

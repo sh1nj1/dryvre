@@ -13,7 +13,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 FORBIDDEN_SOURCE_PATH = re.compile(
-    r"(^|/)(node_modules(/|$)|\.env($|\.)|id_rsa|id_ed25519|.*\.(pem|key|p12)|cookies?\.json$)",
+    r"(^|/)(node_modules(/|$)|\.env($|\.)|id_rsa|id_ed25519|.*\.(pem|key|p12)|"
+    r"cookies?\.json$|[^/]+\.(?:db|sqlite|sqlite3)(?:-(?:wal|shm))?$)",
     re.I,
 )
 
