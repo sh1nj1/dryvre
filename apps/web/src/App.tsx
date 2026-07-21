@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { dryvreDataSource } from './data-source';
-import { BoardView, ContextRail, DocumentView, SearchDialog, Sidebar, StreamView, Topbar, ViewHeader } from './components';
+import { BoardView, ContextRail, DocumentView, SearchDialog, Sidebar, StreamView, Topbar } from './components';
 import type { DryvreSnapshot, SearchFilters, TaskStatus, ViewMode } from './model';
 import { blockPath, descendantsOf } from './model';
 import './styles.css';
@@ -86,9 +86,9 @@ export default function App() {
   };
 
   return <div className="app-shell">
-    <Topbar path={scopePath} mobileTreeOpen={mobileTreeOpen} onToggleMobileTree={() => setMobileTreeOpen((open) => !open)} />
+    <Topbar path={scopePath} view={view} mobileTreeOpen={mobileTreeOpen} onView={setView} onToggleMobileTree={() => setMobileTreeOpen((open) => !open)} />
     <Sidebar blocks={snapshot.blocks} rootId={snapshot.rootId} selectedId={scope.id} visibleIds={visibleIds} mobileOpen={mobileTreeOpen} onSelect={selectFromTree} onOpenSearch={() => setSearchOpen(true)} onClose={() => setMobileTreeOpen(false)} />
-    <main><ViewHeader title={scope.title} view={view} onView={setView} /><div className="canvas">
+    <main><div className="canvas">
       {view === 'document' && <DocumentView scopeId={scope.id} selectedId={selected.id} editingId={editingId} blocks={snapshot.blocks} references={snapshot.references} onSelect={setSelectedId} onEditStart={setEditingId} onEditEnd={(id) => setEditingId((current) => current === id ? null : current)} onEdit={editBlock} onCreateAfter={createBlockAfter} onDelete={deleteBlock} onStatus={(id, status) => void setStatus(id, status)} />}
       {view === 'board' && <BoardView blocks={scopeBlocks} messages={snapshot.messages} selectedId={selected.id} onSelect={setSelectedId} onStatus={(id, status) => void setStatus(id, status)} />}
       {view === 'stream' && <StreamView selected={selected} messages={selectedMessages} onSend={(body) => void sendMessage(body)} />}

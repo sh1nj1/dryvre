@@ -10,11 +10,12 @@ export function Brand() {
   return <a className="brand" href="/" aria-label="Dryvre home"><span className="brand-mark">D</span><span className="brand-name">dryvre</span></a>;
 }
 
-export function Topbar({ path, mobileTreeOpen, onToggleMobileTree }: { path: DryvreBlock[]; mobileTreeOpen: boolean; onToggleMobileTree: () => void }) {
+export function Topbar({ path, view, mobileTreeOpen, onView, onToggleMobileTree }: { path: DryvreBlock[]; view: ViewMode; mobileTreeOpen: boolean; onView: (view: ViewMode) => void; onToggleMobileTree: () => void }) {
   return <header className="topbar">
     <Brand />
-    <div className="crumbs" aria-label="Current block path">
-      {path.map((block, index) => <span className="crumb-part" key={block.id}>{index > 0 && <span className="crumb-sep">/</span>}<strong>{block.title}</strong></span>)}
+    <div className="topbar-main">
+      <div className="crumbs" aria-label="Current block path">{path.map((block, index) => <span className="crumb-part" key={block.id}>{index > 0 && <span className="crumb-sep">/</span>}<strong>{block.title}</strong></span>)}</div>
+      <ViewSwitcher view={view} onView={onView} />
     </div>
     <div className="top-actions"><button className="icon-btn mobile-tree-btn" aria-expanded={mobileTreeOpen} onClick={onToggleMobileTree}>☰</button><div className="avatar">SO</div></div>
   </header>;
@@ -61,11 +62,14 @@ export function Sidebar({ blocks, rootId, selectedId, visibleIds, mobileOpen, on
   </>;
 }
 
-export function ViewHeader({ title, view, onView }: { title: string; view: ViewMode; onView: (view: ViewMode) => void }) {
+function ViewSwitcher({ view, onView }: { view: ViewMode; onView: (view: ViewMode) => void }) {
   const items: { id: ViewMode; icon: string; label: string }[] = [
     { id: 'document', icon: '▤', label: 'Document' }, { id: 'board', icon: '▦', label: 'Board' }, { id: 'stream', icon: '◉', label: 'Stream' },
   ];
-  return <section className="view-header"><h1>{title}</h1><div className="view-switcher" role="tablist">{items.map((item) => <button key={item.id} role="tab" aria-selected={view === item.id} className={view === item.id ? 'active' : ''} onClick={() => onView(item.id)}>{item.icon}&nbsp; {item.label}</button>)}</div></section>;
+  return <>
+    <div className="view-switcher" role="tablist" aria-label="View mode">{items.map((item) => <button key={item.id} role="tab" aria-selected={view === item.id} className={view === item.id ? 'active' : ''} onClick={() => onView(item.id)}><span aria-hidden="true">{item.icon}</span>&nbsp; {item.label}</button>)}</div>
+    <select className="mobile-view-select" aria-label="View mode" value={view} onChange={(event) => onView(event.target.value as ViewMode)}>{items.map((item) => <option value={item.id} key={item.id}>{item.label}</option>)}</select>
+  </>;
 }
 
 function StatusChip({ status }: { status: TaskStatus }) {
