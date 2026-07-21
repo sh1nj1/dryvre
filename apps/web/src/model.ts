@@ -92,6 +92,17 @@ export function blockSummary(block: Pick<DryvreBlock, 'bodyMd'>) {
   return ATX_HEADING.test(line) ? rest.replace(/^(?:[ \t]*\r?\n)+/, '') : bodyMd;
 }
 
+// Markdown for a block's projected heading. When the body starts with an ATX
+// heading, return that original line verbatim so its level (# vs ###) and inline
+// formatting (code, links, emphasis) are preserved; otherwise synthesize a
+// level-2 heading from the fallback title. Rendering the result in heading
+// context keeps inline formatting while stopping a title like `1. Foo` from
+// being reparsed as a list.
+export function headingMarkdown(block: Pick<DryvreBlock, 'title' | 'bodyMd'>) {
+  const { line } = firstContentLine(block.bodyMd ?? '');
+  return ATX_HEADING.test(line) ? line : `## ${blockTitle(block)}`;
+}
+
 export function blockPath(blockId: string, blocks: DryvreBlock[]) {
   const byId = new Map(blocks.map((block) => [block.id, block]));
   const path: DryvreBlock[] = [];

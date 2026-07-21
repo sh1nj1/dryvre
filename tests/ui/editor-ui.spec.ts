@@ -453,13 +453,46 @@ test('renders inline Markdown in the scoped document heading, not raw source', a
   });
 
   await page.goto('/');
-  const heading = page.locator('.doc-sheet h2').first();
+  // The `#` heading renders at its authored level (h1), not a forced h2.
+  const heading = page.locator('.doc-sheet h1').first();
   // The heading must render Markdown: inline code becomes <code>, the link an <a>.
   await expect(heading.locator('code')).toHaveText('fly.io');
   await expect(heading.getByRole('link', { name: 'spec' })).toHaveAttribute('href', 'https://example.com');
   // And it must NOT leak the raw backtick/bracket source.
   await expect(heading).not.toContainText('`');
   await expect(heading).not.toContainText('](');
+});
+
+test('preserves the authored heading level of a scoped document block', async ({ page }) => {
+  const rootId = '00000000-0000-4000-8000-000000000010';
+  const authorId = '00000000-0000-4000-8000-000000000001';
+  // A level-3 heading must render as <h3>, not be rewritten to <h2>.
+  const root = {
+    id: rootId,
+    parentId: null,
+    path: `/${rootId}/`,
+    rank: 'a',
+    bodyMd: '### Deep section\n\nBody copy.',
+    status: null,
+    authorId,
+    version: 0,
+    createdAt: '2026-07-22T00:00:00.000Z',
+    updatedAt: '2026-07-22T00:00:00.000Z',
+  };
+
+  await page.route('**/api/**', async (route) => {
+    const url = new URL(route.request().url());
+    if (url.pathname === `/api/trees/${rootId}`) return route.fulfill({ json: { blocks: [root] } });
+    return route.fulfill({ status: 404, json: { error: 'Not found' } });
+  });
+
+  await page.goto('/');
+  // Wait for the server tree to replace the initial mock render, then assert the
+  // scope heading renders at its authored level (h3), not rewritten to a forced h2.
+  // Scope to the doc sheet so it can't bind to the context rail's own <h3> title.
+  const sheet = page.locator('.doc-sheet').first();
+  await expect(sheet.getByRole('heading', { level: 3, name: 'Deep section' })).toBeVisible();
+  await expect(sheet.locator('h2')).toHaveCount(0);
 });
 
 test('renders inline Markdown in a task block title, not raw source', async ({ page }) => {

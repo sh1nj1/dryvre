@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { blockSummary, blockTitle } from './model';
+import { blockSummary, blockTitle, headingMarkdown } from './model';
 
 describe('Markdown block projections', () => {
   it('derives the display title from a Markdown heading', () => {
@@ -61,5 +61,20 @@ describe('Markdown block projections', () => {
   it('preserves indentation of an indented code block after the heading', () => {
     expect(blockSummary({ bodyMd: '# Example\n\n    const x = 1' })).toBe('    const x = 1');
     expect(blockSummary({ bodyMd: '# T\n\n    a\n    b' })).toBe('    a\n    b');
+  });
+
+  it('returns the original heading line, preserving its level and inline Markdown', () => {
+    // The author's ATX level must survive so read mode does not silently rewrite
+    // `# Root` to `## Root`; inline Markdown in the heading is kept verbatim.
+    expect(headingMarkdown({ title: 'x', bodyMd: '# Root' })).toBe('# Root');
+    expect(headingMarkdown({ title: 'x', bodyMd: '### Details\n\nBody' })).toBe('### Details');
+    expect(headingMarkdown({ title: 'x', bodyMd: '# Ship `dryvre` for the [demo](https://x.com)' })).toBe('# Ship `dryvre` for the [demo](https://x.com)');
+  });
+
+  it('synthesizes a level-2 heading only when there is no ATX heading', () => {
+    expect(headingMarkdown({ title: 'Stored', bodyMd: '' })).toBe('## Stored');
+    expect(headingMarkdown({ title: 'Fallback', bodyMd: 'Just text\nmore' })).toBe('## Fallback');
+    // An empty heading is not a heading, so it falls back rather than emitting `# `.
+    expect(headingMarkdown({ title: 'Stored', bodyMd: '#\nDetails' })).toBe('## Stored');
   });
 });
