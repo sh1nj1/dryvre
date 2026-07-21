@@ -111,7 +111,9 @@ def add_macos_voiceover(silent_video: Path, timeline_path: Path, final_video: Pa
         labels.append(f"[{label}]")
     if not captions:
         raise RuntimeError("cannot synthesize voiceover without subtitle entries")
-    filters.append(f"{''.join(labels)}amix=inputs={len(labels)}:normalize=0:dropout_transition=0[aout]")
+    filters.append(
+        f"{''.join(labels)}amix=inputs={len(labels)}:normalize=0:dropout_transition=0,apad[aout]"
+    )
     run([
         "ffmpeg", "-hide_banner", "-loglevel", "warning", "-y", "-i", str(silent_video),
         *inputs, "-filter_complex", ";".join(filters), "-map", "0:v:0", "-map", "[aout]",

@@ -84,7 +84,7 @@ def main() -> int:
         if path.suffix.lower() == ".mp4":
             video_count += 1
             if not shutil.which("ffprobe"):
-                warnings.append(f"cannot inspect video without ffprobe: {relative}")
+                errors.append(f"cannot inspect video without ffprobe: {relative}")
                 continue
             probe = subprocess.run([
                 "ffprobe", "-v", "error", "-show_entries", "format=duration",
