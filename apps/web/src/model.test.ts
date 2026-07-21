@@ -100,6 +100,13 @@ describe('Markdown block projections', () => {
     expect(headingMarkdown({ title: 'x', bodyMd: '# Plain\n\nbody text' })).toBe('# Plain');
     // A 4-space indent makes it code, not a definition, so it is not carried.
     expect(headingMarkdown({ title: 'x', bodyMd: '# Title\n\n    [not]: a-def' })).toBe('# Title');
+    // CommonMark allows no whitespace after the colon (`[s]:dest`), so a no-space
+    // definition must still be carried, or the heading link renders as raw text.
+    expect(headingMarkdown({ title: 'x', bodyMd: '# [Spec][s]\n\n[s]:https://example.com' })).toBe(
+      '# [Spec][s]\n\n[s]:https://example.com',
+    );
+    // A bare `[s]:` with no destination is not a definition and is not carried.
+    expect(headingMarkdown({ title: 'x', bodyMd: '# [Spec][s]\n\n[s]:' })).toBe('# [Spec][s]');
   });
 
   it('does not lift reference definitions out of fenced code blocks', () => {

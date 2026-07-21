@@ -102,8 +102,10 @@ export function blockSummary(block: Pick<DryvreBlock, 'bodyMd'>) {
 
 // A single-line CommonMark link reference definition (`[label]: dest "title"`),
 // with up to 3 leading spaces (4+ is indented code). These render to nothing but
-// supply targets for reference-style links.
-const REF_DEFINITION = /^ {0,3}\[[^\]]+\]:\s+\S.*$/;
+// supply targets for reference-style links. The whitespace after the colon is
+// optional (`[s]:dest` is valid), so match `\s*`, not `\s+`; `\S` still requires a
+// non-empty destination so a bare `[s]:` is not treated as a definition.
+const REF_DEFINITION = /^ {0,3}\[[^\]]+\]:\s*\S.*$/;
 
 // Fenced code block markers: 3+ backticks or tildes with up to 3 leading spaces.
 // An opening fence may carry an info string; a closing fence may not, so only the
