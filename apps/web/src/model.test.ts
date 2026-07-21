@@ -36,4 +36,25 @@ describe('Markdown block projections', () => {
     expect(blockTitle({ title: 'x', bodyMd: '# Plan ###   ' })).toBe('Plan');
     expect(blockTitle({ title: 'x', bodyMd: '# foo #' })).toBe('foo');
   });
+
+  it('does not treat an empty heading as a projected title, keeping the body intact', () => {
+    // `#` with no text is an empty heading; horizontal-only whitespace after the
+    // hashes stops `\s+` from consuming the newline and swallowing the summary.
+    expect(blockTitle({ title: 'Existing label', bodyMd: '#\nDetails' })).toBe('Existing label');
+    expect(blockSummary({ bodyMd: '#\nDetails' })).toBe('#\nDetails');
+    expect(blockSummary({ bodyMd: '###\n\nDetails' })).toBe('###\n\nDetails');
+  });
+
+  it('does not derive a title from an indented code line', () => {
+    // 4+ leading spaces make this a CommonMark code block, not a heading, so the
+    // projection must not strip it or fall out of sync with the rendered body.
+    const block = { title: 'Existing label', bodyMd: '    # Not a heading\nmore' };
+
+    expect(blockTitle(block)).toBe('Existing label');
+    expect(blockSummary(block)).toBe('    # Not a heading\nmore');
+  });
+
+  it('accepts up to three leading spaces before a heading', () => {
+    expect(blockTitle({ title: 'x', bodyMd: '   # Three space heading' })).toBe('Three space heading');
+  });
 });

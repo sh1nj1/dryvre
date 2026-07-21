@@ -59,18 +59,33 @@ export interface DryvreDataSource {
   deleteBlock(blockId: string): Promise<void>;
 }
 
+// A Markdown ATX heading, per CommonMark: up to 3 leading spaces (4+ is an
+// indented code block, which ReactMarkdown renders as code, not a heading);
+// 1-6 hashes; then *horizontal* whitespace (`[ \t]`, never a newline, so an
+// empty heading like `#` cannot consume the following line); the title text;
+// and an optional whitespace-separated closing hash sequence. `blockTitle` and
+// `blockSummary` share this single detector so their projections never drift.
+const ATX_HEADING = /^ {0,3}#{1,6}[ \t]+(.+?)(?:[ \t]+#+)?[ \t]*\r?$/;
+
+// Isolate the first non-blank line without collapsing its indentation — leading
+// blank lines are skipped, but a 4-space indent on the first content line must
+// survive so the ATX rule above can reject it as code.
+function firstContentLine(bodyMd: string) {
+  const lines = bodyMd.split('\n');
+  let i = 0;
+  while (i < lines.length && (lines[i] ?? '').trim() === '') i++;
+  return { line: (lines[i] ?? '').replace(/\r$/, ''), rest: lines.slice(i + 1).join('\n') };
+}
+
 export function blockTitle(block: Pick<DryvreBlock, 'title' | 'bodyMd'>) {
-  const firstLine = block.bodyMd?.trimStart().split('\n', 1)[0] ?? '';
-  const heading = firstLine.match(/^#{1,6}\s+(.+?)(?:\s+#+)?\s*$/);
+  const heading = firstContentLine(block.bodyMd ?? '').line.match(ATX_HEADING);
   return heading?.[1]?.trim() || block.title;
 }
 
 export function blockSummary(block: Pick<DryvreBlock, 'bodyMd'>) {
   const bodyMd = block.bodyMd ?? '';
-  const trimmed = bodyMd.trimStart();
-  // Accept CRLF line endings: `.` stops before `\r`, so the terminator must allow `\r?\n`.
-  const heading = /^#{1,6}\s+.*(?:\r?\n|$)/;
-  return heading.test(trimmed) ? trimmed.replace(heading, '').trimStart() : bodyMd;
+  const { line, rest } = firstContentLine(bodyMd);
+  return ATX_HEADING.test(line) ? rest.trimStart() : bodyMd;
 }
 
 export function blockPath(blockId: string, blocks: DryvreBlock[]) {
