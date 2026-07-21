@@ -169,6 +169,40 @@ function yamlString(value: string) {
   return JSON.stringify(value.replace(/\s+/g, " ").trim());
 }
 
+export function sortBlocksInDocumentOrder(blocks: Block[]) {
+  const ids = new Set(blocks.map((block) => block.id));
+  const children = new Map<string | null, Block[]>();
+  for (const block of blocks) {
+    const parentId = block.parentId && ids.has(block.parentId)
+      ? block.parentId
+      : null;
+    const siblings = children.get(parentId) ?? [];
+    siblings.push(block);
+    children.set(parentId, siblings);
+  }
+  const compare = (left: Block, right: Block) => {
+    if (left.rank === null && right.rank !== null) return 1;
+    if (left.rank !== null && right.rank === null) return -1;
+    const byRank = (left.rank ?? "").localeCompare(right.rank ?? "");
+    if (byRank) return byRank;
+    const byCreatedAt = left.createdAt.localeCompare(right.createdAt);
+    return byCreatedAt || left.id.localeCompare(right.id);
+  };
+  for (const siblings of children.values()) siblings.sort(compare);
+
+  const ordered: Block[] = [];
+  const visited = new Set<string>();
+  const visit = (block: Block) => {
+    if (visited.has(block.id)) return;
+    visited.add(block.id);
+    ordered.push(block);
+    for (const child of children.get(block.id) ?? []) visit(child);
+  };
+  for (const root of children.get(null) ?? []) visit(root);
+  for (const block of [...blocks].sort(compare)) visit(block);
+  return ordered;
+}
+
 export function compileSkills(
   blocks: Block[],
   scopeRootIds: string[],

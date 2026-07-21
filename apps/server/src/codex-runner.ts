@@ -115,7 +115,7 @@ export type CodexRunResult = ReturnType<typeof parseCodexJsonl> & {
   timedOut: boolean;
 };
 
-function executeProcess(input: {
+export function executeProcess(input: {
   command: string;
   args: string[];
   cwd: string;
@@ -140,18 +140,28 @@ function executeProcess(input: {
     let stdout = "";
     let stderr = "";
     let timedOut = false;
+    let settled = false;
     child.stdout.on("data", (chunk: Buffer) => {
       stdout = appendWithCap(stdout, chunk.toString("utf8"));
     });
     child.stderr.on("data", (chunk: Buffer) => {
       stderr = appendWithCap(stderr, chunk.toString("utf8"));
     });
-    child.once("error", reject);
+    const fail = (error: Error) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeout);
+      reject(error);
+    };
+    child.once("error", fail);
+    child.stdin.once("error", fail);
     const timeout = setTimeout(() => {
       timedOut = true;
       stopCodexProcess(child);
     }, input.timeoutMs);
     child.once("close", (exitCode) => {
+      if (settled) return;
+      settled = true;
       clearTimeout(timeout);
       resolve({ exitCode, stdout, stderr, timedOut });
     });

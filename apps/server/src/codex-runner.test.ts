@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { AppConfig } from "./config.js";
-import { checkCodexReadiness, runCodex } from "./codex-runner.js";
+import { checkCodexReadiness, executeProcess, runCodex } from "./codex-runner.js";
 
 const config: AppConfig = {
   NODE_ENV: "test",
@@ -41,5 +41,22 @@ describe("Codex runner", () => {
       mode: "fake",
       version: "fake",
     });
+  });
+
+  it("settles the process promise when the child closes stdin early", async () => {
+    try {
+      const result = await executeProcess({
+        command: process.execPath,
+        args: ["-e", "process.stdin.destroy(); process.exit(1)"],
+        cwd: process.cwd(),
+        env: process.env,
+        prompt: "x".repeat(2 * 1024 * 1024),
+        timeoutMs: 1_000,
+        onSpawn: () => undefined,
+      });
+      expect(result.exitCode).not.toBe(0);
+    } catch (error) {
+      expect((error as NodeJS.ErrnoException).code).toBe("EPIPE");
+    }
   });
 });

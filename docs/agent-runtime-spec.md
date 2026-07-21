@@ -116,6 +116,7 @@ agent_run(
   target_block_id FK block,
   requested_by FK subject,
   status queued|running|succeeded|failed|cancelled,
+  workspace?,
   codex_session_id?,
   pid?,
   started_at?, finished_at?, error_code?

@@ -15,6 +15,13 @@
       "when": 1784637645616,
       "tag": "0001_nostalgic_luckman",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1784640832076,
+      "tag": "0002_remarkable_trish_tilby",
+      "breakpoints": true
     }
   ]
 }

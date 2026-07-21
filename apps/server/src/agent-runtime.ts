@@ -12,6 +12,7 @@ import {
 import {
   compileSkills,
   parseAgentDefinition,
+  sortBlocksInDocumentOrder,
   type AgentRun,
   type Block,
   type CreateAgentRun,
@@ -86,7 +87,7 @@ export async function createAgentRuntime(
 
   async function readDefinition(agentBlockId: string) {
     const rows = await db.select().from(blocks);
-    const allBlocks = rows.map(serializeBlock);
+    const allBlocks = sortBlocksInDocumentOrder(rows.map(serializeBlock));
     const agent = allBlocks.find((block) => block.id === agentBlockId);
     if (!agent) throw new Error("Agent block not found");
     const definition = parseAgentDefinition(agent, allBlocks);
@@ -177,6 +178,7 @@ export async function createAgentRuntime(
         ? await db.query.agentRuns.findFirst({
             where: and(
               eq(agentRuns.agentBlockId, input.agentBlockId),
+              eq(agentRuns.workspace, workspace),
               eq(agentRuns.status, "succeeded"),
               isNotNull(agentRuns.codexSessionId),
             ),
@@ -200,7 +202,7 @@ export async function createAgentRuntime(
       if (cancelled.has(runId)) return;
       const [started] = await db
         .update(agentRuns)
-        .set({ status: "running", startedAt: new Date() })
+        .set({ status: "running", workspace, startedAt: new Date() })
         .where(and(eq(agentRuns.id, runId), eq(agentRuns.status, "queued")))
         .returning({ id: agentRuns.id });
       if (!started || cancelled.has(runId)) return;

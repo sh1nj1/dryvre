@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { blockOpSchema, compileSkills, deriveBlockKind, parseAgentDefinition, parseBlockDirective, parseCodexJsonl, type Block } from './index.js';
+import { blockOpSchema, compileSkills, deriveBlockKind, parseAgentDefinition, parseBlockDirective, parseCodexJsonl, sortBlocksInDocumentOrder, type Block } from './index.js';
 
 const baseBlock = (overrides: Partial<Block>): Block => ({
   id: crypto.randomUUID(),
@@ -73,6 +73,19 @@ describe("agent and skill contracts", () => {
     expect(compiled[0]?.skillMd).not.toContain("Review documentation");
     expect(compiled[0]?.files).toEqual([
       { path: "scripts/check.sh", content: "npm test" },
+    ]);
+  });
+
+  it("sorts shuffled blocks in tree and sibling rank order", () => {
+    const root = baseBlock({ id: "00000000-0000-4000-8000-000000000001", path: "/root/", rank: "a" });
+    const later = baseBlock({ id: "00000000-0000-4000-8000-000000000002", parentId: root.id, path: "/root/later/", rank: "b" });
+    const earlier = baseBlock({ id: "00000000-0000-4000-8000-000000000003", parentId: root.id, path: "/root/earlier/", rank: "a" });
+    const nested = baseBlock({ id: "00000000-0000-4000-8000-000000000004", parentId: earlier.id, path: "/root/earlier/nested/", rank: "a" });
+    expect(sortBlocksInDocumentOrder([later, nested, root, earlier]).map((block) => block.id)).toEqual([
+      root.id,
+      earlier.id,
+      nested.id,
+      later.id,
     ]);
   });
 

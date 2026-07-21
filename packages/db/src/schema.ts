@@ -77,6 +77,7 @@ export const agentRuns = pgTable('agent_run', {
   targetBlockId: uuid('target_block_id').notNull().references(() => blocks.id, { onDelete: 'cascade' }),
   requestedBy: uuid('requested_by').notNull().references(() => subjects.id),
   status: agentRunStatus('status').notNull().default('queued'),
+  workspace: text('workspace'),
   codexSessionId: text('codex_session_id'),
   pid: integer('pid'),
   startedAt: timestamp('started_at', { withTimezone: true, mode: 'date' }),
@@ -84,7 +85,7 @@ export const agentRuns = pgTable('agent_run', {
   errorCode: text('error_code'),
   createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
 }, (table) => [
-  index('agent_run_agent_created_idx').on(table.agentBlockId, table.createdAt),
+  index('agent_run_agent_workspace_created_idx').on(table.agentBlockId, table.workspace, table.createdAt),
   index('agent_run_status_idx').on(table.status),
 ]);
 
