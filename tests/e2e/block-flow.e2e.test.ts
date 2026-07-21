@@ -165,6 +165,21 @@ describe('Dryvre API with PostgreSQL', () => {
     expect(request).toBeDefined();
     expect(blocked.references).toContainEqual({ fromId: request!.id, toId: task.id });
 
+    // A board/API move from blocked back to todo before answering must reuse the
+    // pending loop, not fork a second approval request: the version bump would
+    // otherwise slip past the unique (task, version) guard. The task returns to
+    // blocked against the same request, and no duplicate request appears.
+    const blockedTask = blocked.blocks.find((block) => block.id === task.id)!;
+    await expect(post('/api/ops', {
+      clientOpId: randomUUID(),
+      op: { type: 'setStatus', id: task.id, status: 'todo', version: blockedTask.version },
+    })).resolves.toHaveProperty('status', 200);
+    const reblocked = await waitForTree((tree) => {
+      const current = tree.blocks.find((block) => block.id === task.id);
+      return current?.status === 'blocked' && current.version > blockedTask.version;
+    });
+    expect(reblocked.blocks.filter((block) => block.parentId === inboxId && block.bodyMd.includes('Approval required'))).toHaveLength(1);
+
     await expect(post('/api/ops', {
       clientOpId: randomUUID(),
       op: {
@@ -206,9 +221,11 @@ describe('Dryvre API with PostgreSQL', () => {
       const operation = payload as { type?: string; id?: string; status?: string };
       return operation.type === 'setStatus' && operation.id === task.id ? [operation.status] : [];
     });
-    expect(statusHistory).toEqual(['todo', 'blocked', 'todo', 'in_progress', 'done']);
+    expect(statusHistory).toEqual(['todo', 'blocked', 'todo', 'blocked', 'todo', 'in_progress', 'done']);
     expect(loops).toContainEqual(expect.objectContaining({ taskBlockId: task.id, state: 'completed', requestBlockId: request!.id }));
-    expect(deliveries.filter((delivery) => delivery.status === 'completed')).toHaveLength(2);
+    // The blocked→todo toggle reused the pending loop rather than forking a second one.
+    expect(loops.filter((loop) => loop.taskBlockId === task.id)).toHaveLength(1);
+    expect(deliveries.filter((delivery) => delivery.status === 'completed')).toHaveLength(3);
     expect(deliveries.some((delivery) => delivery.status === 'failed')).toBe(false);
   });
 

@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { and, eq, inArray, like } from 'drizzle-orm';
+import { and, eq, inArray, like, notInArray } from 'drizzle-orm';
 import {
   agentLoops,
   agentTriggerDeliveries,
@@ -189,6 +189,27 @@ export function createAgentEventRuntime(
   }
 
   async function beginTaskLoop(definition: TriggerDefinition, task: typeof blocks.$inferSelect, requestedBy: string) {
+    // A status toggle (e.g. a board/API move from blocked back to todo) before the
+    // user answers bumps the task version, so a fresh insert would slip past the
+    // unique (task, version) guard and fork a second loop and Inbox request. Reuse
+    // the existing pending loop instead: for a still-waiting approval, re-block the
+    // task so the original request stays the single approval gate; for a loop that is
+    // already executing (ready/running/verifying), leave it untouched.
+    const [pending] = await db.select().from(agentLoops).where(and(
+      eq(agentLoops.taskBlockId, task.id),
+      notInArray(agentLoops.state, ['completed', 'failed']),
+    )).limit(1);
+    if (pending) {
+      if (pending.state === 'waiting_input' && task.status !== 'blocked') {
+        const pendingAuthorId = await agentRuntime.subjectFor(pending.agentBlockId);
+        emit(await applyOperation(db, {
+          clientOpId: randomUUID(),
+          op: { type: 'setStatus', id: task.id, status: 'blocked', version: task.version },
+        }, pendingAuthorId));
+      }
+      return;
+    }
+
     const context = await taskContext(task);
     const agentAuthorId = await agentRuntime.subjectFor(definition.agentBlockId);
     if (!contractNeedsInput(context)) {
