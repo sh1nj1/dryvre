@@ -21,18 +21,18 @@ export function Brand() {
   return <a className="brand" href="/" aria-label="Dryvre home"><span className="brand-mark">D</span><span className="brand-name">dryvre</span></a>;
 }
 
-export function Topbar({ path, view, mobileTreeOpen, onView, onToggleMobileTree }: { path: DryvreBlock[]; view: ViewMode; mobileTreeOpen: boolean; onView: (view: ViewMode) => void; onToggleMobileTree: () => void }) {
+export function Topbar({ path, view, mobileTreeOpen, showInbox, inboxActive, onView, onToggleMobileTree, onOpenInbox }: { path: DryvreBlock[]; view: ViewMode; mobileTreeOpen: boolean; showInbox: boolean; inboxActive: boolean; onView: (view: ViewMode) => void; onToggleMobileTree: () => void; onOpenInbox: () => void }) {
   return <header className="topbar">
     <Brand />
     <div className="topbar-main">
       <div className="crumbs" aria-label="Current block path">{path.map((block, index) => <span className="crumb-part" key={block.id}>{index > 0 && <span className="crumb-sep">/</span>}<strong>{blockTitle(block)}</strong></span>)}</div>
       <ViewSwitcher view={view} onView={onView} />
     </div>
-    <div className="top-actions"><button className="icon-btn mobile-tree-btn" aria-expanded={mobileTreeOpen} onClick={onToggleMobileTree}>☰</button><div className="avatar">SO</div></div>
+    <div className="top-actions"><button className="icon-btn mobile-tree-btn" aria-expanded={mobileTreeOpen} onClick={onToggleMobileTree}>☰</button>{showInbox && <button className={`inbox-trigger ${inboxActive ? 'active' : ''}`} aria-label="Inbox" onClick={onOpenInbox}><span aria-hidden="true">◎</span><span>Inbox</span></button>}<div className="avatar">SO</div></div>
   </header>;
 }
 
-export function Sidebar({ blocks, rootId, inboxId, selectedId, visibleIds, mobileOpen, onSelect, onOpenInbox, onOpenSearch, onClose }: {
+export function Sidebar({ blocks, rootId, inboxId, selectedId, visibleIds, mobileOpen, onSelect, onOpenSearch, onClose }: {
   blocks: DryvreBlock[];
   rootId: string;
   inboxId: string | undefined;
@@ -40,7 +40,6 @@ export function Sidebar({ blocks, rootId, inboxId, selectedId, visibleIds, mobil
   visibleIds: Set<string> | null;
   mobileOpen: boolean;
   onSelect: (id: string) => void;
-  onOpenInbox: (id: string) => void;
   onOpenSearch: () => void;
   onClose: () => void;
 }) {
@@ -66,11 +65,10 @@ export function Sidebar({ blocks, rootId, inboxId, selectedId, visibleIds, mobil
   };
 
   const root = blocks.find((block) => block.id === rootId);
-  const inbox = inboxId ? blocks.find((block) => block.id === inboxId) : undefined;
   return <>
     <div className={`mobile-backdrop ${mobileOpen ? 'show' : ''}`} onClick={onClose} />
     <aside className={`sidebar ${mobileOpen ? 'mobile-open' : ''}`}>
-      <div className="side-tools"><button className="search-trigger" onClick={onOpenSearch}><span>⌕</span><span>Search &amp; filter</span><kbd>⌘K</kbd></button>{inbox && <button className={`inbox-trigger ${selectedId === inbox.id ? 'active' : ''}`} onClick={() => onOpenInbox(inbox.id)}><span>◎</span><span>Inbox</span></button>}</div>
+      <div className="side-tools"><button className="search-trigger" onClick={onOpenSearch}><span>⌕</span><span>Search &amp; filter</span><kbd>⌘K</kbd></button></div>
       <nav className="tree-wrap" aria-label="Block tree"><div className="section-label"><span>Tree</span></div>{root && renderNode(root, 0)}</nav>
     </aside>
   </>;

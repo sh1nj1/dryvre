@@ -144,6 +144,12 @@ export default function App() {
   };
 
   const selectFromTree = (id: string) => { setFocusedMessageId(undefined); setScopeId(id); setSelectedId(id); };
+  const openInbox = () => {
+    if (!inboxId || !byId.has(inboxId)) return;
+    selectFromTree(inboxId);
+    setView('stream');
+    setMobileTreeOpen(false);
+  };
   const setStatus = async (id: string, status: TaskStatus) => {
     if (serverBacked) {
       const block = serverBlocks.find((item) => item.id === id);
@@ -228,8 +234,8 @@ export default function App() {
   const contextSummary = `${contextBlockCount} ${contextBlockCount === 1 ? 'block' : 'blocks'} · ${contextReferenceCount} ${contextReferenceCount === 1 ? 'reference' : 'references'}`;
 
   return <div className="app-shell" style={{ '--sidebar': `${panelLayout.left}px`, '--context': `${panelLayout.right}px` } as CSSProperties}>
-    <Topbar path={scopePath} view={view} mobileTreeOpen={mobileTreeOpen} onView={setView} onToggleMobileTree={() => setMobileTreeOpen((open) => !open)} />
-    <Sidebar blocks={snapshot.blocks} rootId={snapshot.rootId} inboxId={inboxId} selectedId={scope.id} visibleIds={visibleIds} mobileOpen={mobileTreeOpen} onSelect={selectFromTree} onOpenInbox={(id) => { selectFromTree(id); setView('stream'); setMobileTreeOpen(false); }} onOpenSearch={() => setSearchOpen(true)} onClose={() => setMobileTreeOpen(false)} />
+    <Topbar path={scopePath} view={view} mobileTreeOpen={mobileTreeOpen} showInbox={Boolean(inboxId && byId.has(inboxId))} inboxActive={scope.id === inboxId} onView={setView} onToggleMobileTree={() => setMobileTreeOpen((open) => !open)} onOpenInbox={openInbox} />
+    <Sidebar blocks={snapshot.blocks} rootId={snapshot.rootId} inboxId={inboxId} selectedId={scope.id} visibleIds={visibleIds} mobileOpen={mobileTreeOpen} onSelect={selectFromTree} onOpenSearch={() => setSearchOpen(true)} onClose={() => setMobileTreeOpen(false)} />
     <main className={view === 'stream' ? 'workspace workspace-hidden' : 'workspace'}><div className="canvas">
       {view === 'document' && <DocumentView scopeId={scope.id} selectedId={selected.id} editingId={editingId} blocks={snapshot.blocks} references={snapshot.references} onSelect={setSelectedId} onEditStart={setEditingId} onEditEnd={(id) => setEditingId((current) => current === id ? null : current)} onEdit={editBlock} onCreateAfter={createBlockAfter} onDelete={deleteBlock} onStatus={(id, status) => void setStatus(id, status)} />}
       {view === 'board' && <BoardView blocks={scopeBlocks} messages={snapshot.messages} selectedId={selected.id} onSelect={setSelectedId} onStatus={(id, status) => void setStatus(id, status)} />}
