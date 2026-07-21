@@ -69,3 +69,16 @@ test('uses a compact view selector and tree drawer on mobile', async ({ page }) 
   await expect(page.locator('.sidebar')).toHaveClass(/mobile-open/);
   await expect(page.locator('.mobile-backdrop')).toHaveClass(/show/);
 });
+
+test('renders blocked as a first-class board and search status', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('tab', { name: /Board/ }).click();
+  await expect(page.locator('.column')).toHaveCount(4);
+  const blockedColumn = page.locator('.column').filter({ has: page.getByText('Blocked', { exact: true }) });
+  await expect(blockedColumn.getByText('Record the three-minute product story')).toBeVisible();
+
+  await page.getByRole('button', { name: /Search & filter/ }).click();
+  const statusFilter = page.getByRole('dialog').locator('.filter-field').filter({ hasText: 'Status' }).locator('select');
+  await expect(statusFilter).toContainText('Blocked');
+});

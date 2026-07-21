@@ -28,6 +28,13 @@ describe('shared block contract', () => {
   it('rejects block bodies above the shared protocol limit', () => {
     expect(blockOpSchema.safeParse({ type: 'create', parentId: null, bodyMd: 'x'.repeat(100_001), stream: true }).success).toBe(false);
   });
+
+  it('accepts every defined task status, including blocked', () => {
+    const id = crypto.randomUUID();
+    for (const status of ['todo', 'in_progress', 'blocked', 'done']) {
+      expect(blockOpSchema.safeParse({ type: 'setStatus', id, status }).success).toBe(true);
+    }
+  });
 });
 
 describe("agent and skill contracts", () => {

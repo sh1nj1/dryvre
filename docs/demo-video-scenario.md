@@ -34,9 +34,9 @@
 | 0:15–0:35 | 출시 요구사항 아래 스트림을 열고 `@PM Agent, turn this into an executable launch task`라고 요청한다. | “First, the PM Agent turns scattered context into an executable contract.” |
 | 0:35–0:55 | PM Agent가 결과물, 완료 조건, 제약, 검증 방법과 `@Developer Agent`가 포함된 자식 블록을 작성한다. 상태는 아직 없다. | “The AI creates an editable block in the same tree, not a separate ticket.” |
 | 0:55–1:08 | 사용자가 작업을 검토하고 `todo`로 바꾼다. 보드에 같은 ID의 카드가 나타난다. | “Moving it to To do is the human's explicit approval to execute.” |
-| 1:08–1:25 | Developer Agent가 사전 검증한다. 공개 승인 조건이 빠져 있어 카드는 `todo`에 머문다. 왼쪽 Inbox에 새 요청 표시가 나타난다. | “The Developer Agent checks the completion contract first. It never guesses past a missing decision.” |
+| 1:08–1:25 | Developer Agent가 사전 검증한다. 공개 승인 조건이 빠져 있어 카드가 `todo`에서 `blocked`로 이동하고 왼쪽 Inbox에 새 요청 표시가 나타난다. | “The Developer Agent checks the completion contract first. A missing decision moves the task to Blocked instead of being guessed away.” |
 | 1:25–1:45 | Inbox를 열어 원래 작업이 참조된 질문을 확인한다. 사용자가 답글로 공개를 승인한다. | “Blocking questions and approval requests arrive in one personal Inbox stream.” |
-| 1:45–2:05 | 작업 화면으로 돌아오면 같은 카드가 자동으로 `in_progress`가 되고 Developer Agent가 실행 로그와 결과 블록을 추가한다. | “With the answer provided, the agent claims the same task and resumes the loop.” |
+| 1:45–2:05 | 작업 화면으로 돌아오면 같은 카드가 `blocked → todo → in_progress`로 전이되고 Developer Agent가 실행 로그와 결과 블록을 추가한다. | “With the answer provided, the task returns to To do, passes validation, and the agent claims it as In progress.” |
 | 2:05–2:25 | 검증 체크가 성공하고 결과·증거 자식 블록이 보인 뒤 카드가 `done`으로 이동한다. | “Only verified work, recorded with evidence, can move to Done.” |
 | 2:25–2:42 | 문서, 보드, 스트림을 빠르게 전환하며 작업 ID, 상태, Inbox 질문의 backlink와 결과 블록이 유지됨을 보여준다. | “Plans, execution, questions, and results never need copying or syncing. They are the same blocks from the start.” |
 | 2:42–2:50 | 제품명과 핵심 문장을 보여준다. | “Humans set intent. Agents close the loop.” |
@@ -45,9 +45,9 @@
 
 1. PM Agent가 만든 작업은 처음에는 상태가 없다.
 2. 사용자가 직접 `todo`로 전환한다.
-3. 완료 조건이 부족한 동안에는 `todo`가 유지된다.
+3. 완료 조건이 부족하면 `todo`에서 `blocked`로 이동한다.
 4. Inbox 요청은 사용자를 멘션하고 원래 작업을 참조한다.
-5. 사용자 답글 뒤 같은 작업이 `in_progress`로 바뀐다.
+5. 사용자 답글 뒤 같은 작업이 `todo`로 복귀한 다음 `in_progress`로 선점된다.
 6. 결과와 검증 근거가 같은 작업 아래에 생성된다.
 7. 검증 성공 후 같은 작업이 `done`이 된다.
 8. 뷰를 바꿔도 블록 ID와 상태가 유지된다.

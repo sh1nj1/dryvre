@@ -6,7 +6,7 @@ import { descendantsOf } from './model';
 import { BlockEditor, type EditorSaveResult } from './block-editor';
 import { api } from './api';
 
-const statusLabels: Record<TaskStatus, string> = { todo: 'To do', in_progress: 'In progress', done: 'Done' };
+const statusLabels: Record<TaskStatus, string> = { todo: 'To do', in_progress: 'In progress', blocked: 'Blocked', done: 'Done' };
 
 export function Brand() {
   return <a className="brand" href="/" aria-label="Dryvre home"><span className="brand-mark">D</span><span className="brand-name">dryvre</span></a>;
@@ -75,7 +75,8 @@ function ViewSwitcher({ view, onView }: { view: ViewMode; onView: (view: ViewMod
 }
 
 function StatusChip({ status }: { status: TaskStatus }) {
-  return <span className={`status-chip ${status}`}>{status === 'in_progress' && '● '}{statusLabels[status]}</span>;
+  const marker = status === 'in_progress' ? '● ' : status === 'blocked' ? '⏸ ' : '';
+  return <span className={`status-chip ${status}`}>{marker}{statusLabels[status]}</span>;
 }
 
 export function DocumentView({ scopeId, selectedId, editingId, blocks, references, onSelect, onEditStart, onEditEnd, onEdit, onCreateAfter, onDelete, onStatus }: {
@@ -128,7 +129,7 @@ export function DocumentView({ scopeId, selectedId, editingId, blocks, reference
 }
 
 export function BoardView({ blocks, messages, selectedId, onSelect, onStatus }: { blocks: DryvreBlock[]; messages: BlockMessage[]; selectedId: string; onSelect: (id: string) => void; onStatus: (id: string, status: TaskStatus) => void }) {
-  const columns: { status: TaskStatus; label: string }[] = [{ status: 'todo', label: 'To do' }, { status: 'in_progress', label: 'In progress' }, { status: 'done', label: 'Done' }];
+  const columns: { status: TaskStatus; label: string }[] = [{ status: 'todo', label: 'To do' }, { status: 'in_progress', label: 'In progress' }, { status: 'blocked', label: 'Blocked' }, { status: 'done', label: 'Done' }];
   return <div className="board">{columns.map((column) => {
     const cards = blocks.filter((block) => block.status === column.status);
     return <section className="column" key={column.status}><header className="column-head"><span className="column-dot" />{column.label}<span>{cards.length}</span></header><div className="cards">{cards.map((block) => <article className={`card ${selectedId === block.id ? 'selected' : ''}`} key={block.id} onClick={() => onSelect(block.id)}><div className="card-meta"><span>{block.parentId ? blocks.find((item) => item.id === block.parentId)?.title : 'Root'}</span><code>#{block.id.slice(0, 4).toUpperCase()}</code></div><h3>{block.title}</h3><p>{block.bodyMd}</p><div className="card-footer"><span className={`mini-avatar ${block.author === 'Dryvre AI' ? 'agent' : ''}`}>{block.author === 'Dryvre AI' ? 'AI' : block.author.split(' ').map((part) => part[0]).join('').slice(0, 2)}</span><span className="comment-count">◉ {messages.filter((message) => message.parentId === block.id).length}</span><select aria-label={`Change status for ${block.title}`} value={block.status} onClick={(event) => event.stopPropagation()} onChange={(event) => onStatus(block.id, event.target.value as TaskStatus)}>{columns.map((item) => <option value={item.status} key={item.status}>{item.label}</option>)}</select></div></article>)}<button className="add-card">＋ Add block</button></div></section>;
@@ -170,7 +171,7 @@ export function SearchDialog({ open, blocks, scopePath, onClose, onApply }: { op
   const patch = <K extends keyof SearchFilters>(key: K, value: SearchFilters[K]) => setFilters((current) => ({ ...current, [key]: value }));
   return <div className="search-overlay open" role="dialog" aria-modal="true" aria-labelledby="search-title" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}><section className="search-dialog"><header className="search-dialog-head"><span>⌕</span><input ref={input} value={filters.text} onChange={(event) => patch('text', event.target.value)} placeholder="Search blocks in this tree…" /><kbd>ESC</kbd></header><div className="filter-area"><div className="filter-title"><span id="search-title">Filter conditions</span><button onClick={() => setFilters(emptyFilters)}>Clear all</button></div><div className="filter-grid">
     <FilterField label="References" value={filters.referenceId} onChange={(value) => patch('referenceId', value)} options={[['', 'Any reference'], ...blocks.filter((block) => ['build-week', 'research'].includes(block.id)).map((block) => [block.id, block.title])]} />
-    <FilterField label="Status" value={filters.status} onChange={(value) => patch('status', value as SearchFilters['status'])} options={[['', 'Any status'], ['todo', 'To do'], ['in_progress', 'In progress'], ['done', 'Done'], ['not_task', 'Not a task']]} />
+    <FilterField label="Status" value={filters.status} onChange={(value) => patch('status', value as SearchFilters['status'])} options={[['', 'Any status'], ['todo', 'To do'], ['in_progress', 'In progress'], ['blocked', 'Blocked'], ['done', 'Done'], ['not_task', 'Not a task']]} />
     <FilterField label="Author" value={filters.author} onChange={(value) => patch('author', value)} options={[['', 'Anyone'], ...[...new Set(blocks.map((block) => block.author))].map((author) => [author, author])]} />
     <FilterField label="Updated" value={filters.updated} onChange={(value) => patch('updated', value as SearchFilters['updated'])} options={[['', 'Any time'], ['today', 'Today'], ['week', 'Past 7 days'], ['month', 'Past 30 days']]} />
   </div><div className="search-scope">◎ Searching within <strong>{scopePath.map((block) => block.title).join(' / ')}</strong></div></div><footer className="search-dialog-foot"><span>Results keep their tree structure and remain editable.</span><button className="primary-btn" onClick={() => { onApply(filters); onClose(); }}>Apply to tree</button></footer></section></div>;

@@ -153,6 +153,8 @@ POST   /api/agents/:blockId/validate
 
 `POST /api/agent-runs`는 run을 만든 뒤 즉시 `202`를 반환한다. 시작과 취소는 콘텐츠용 7개 block op에 추가하지 않는다. Agent가 만든 결과 블록은 기존 `create` op를 사용하므로 op log와 실시간 동기화 규칙을 그대로 따른다.
 
+`agent_run.status`의 `queued|running|succeeded|failed|cancelled`는 프로세스 상태이며, 작업 블록의 `todo|in_progress|blocked|done`과 다른 축이다. 사용자 입력 대기는 작업 블록의 `blocked`와 상위 `agent_loop.state=waiting_input`으로 표현하고 `agent_run.status`에 새 값을 추가하지 않는다.
+
 ### WebSocket
 
 기존 연결에 아래 서버 이벤트만 추가한다.

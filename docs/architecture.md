@@ -25,7 +25,7 @@ agent_run(
 )
 agent_loop(
   task_block_id, agent_block_id, activated_by, trigger_version, state,
-  request_block_id?, agent_run_id?, created_at, updated_at
+  request_block_id?, agent_run_id?, resume_status?, created_at, updated_at
 )
 session(id, subject_id, expires_at)
 ```
@@ -34,13 +34,14 @@ session(id, subject_id, expires_at)
 - 루트 블록이 작업 공간의 경계이며 별도의 workspace 테이블을 요구하지 않는다.
 - `rank`가 있으면 정본 문서 블록, `null`이면 스트림 블록이다.
 - 자식 정렬은 `rank NULLS LAST`, 이후 `created_at` 순이다.
-- `status`가 `null`이면 태스크가 아니다.
+- `block.status`의 허용값은 `todo`, `in_progress`, `blocked`, `done`이다. `null`이면 태스크가 아니다.
+- `blocked`는 사람 또는 외부 입력 대기만 표현한다. 실행 실패와 런타임 오류는 `agent_loop.state`와 `agent_run.status`에 기록한다.
 - 블록의 표현 종류는 별도 `kind` 컬럼 대신 `body_md`의 Markdown 접두사에서 파생한다.
 - `version`으로 동일 블록의 낙관적 동시 편집 충돌을 감지한다.
 - `subject_inbox`는 사용자 subject와 Inbox 역할을 맡은 블록을 각각 유일하게 연결한다. 사용자 생성 시 함께 만들고 연결된 동안에는 해당 블록을 삭제하거나 다른 사용자에게 다시 연결할 수 없다. Inbox의 내용은 별도 알림 행이 아니라 그 블록의 자식이다.
 - `agent_binding`은 `@agent` 정의 블록과 실행 subject를 연결한다.
 - `agent_run`은 Local Codex 프로세스 한 번의 실행 상태를 보관하며 [로컬 Agent와 계층형 Skill 스펙](agent-runtime-spec.md)의 기존 계약을 유지한다.
-- `agent_loop`는 작업 활성화부터 계약 검사, 사용자 입력 대기, 실행과 검증까지의 상위 조율 projection이다. `(task_block_id, trigger_version)`은 유일하고 상태는 `checking`, `waiting_input`, `ready`, `running`, `verifying`, `completed`, `failed`로 제한한다. 활성 질문과 실제 도구 실행은 각각 `request_block_id`, `agent_run_id`로 연결한다.
+- `agent_loop`는 작업 활성화부터 계약 검사, 사용자 입력 대기, 실행과 검증까지의 상위 조율 projection이다. `(task_block_id, trigger_version)`은 유일하고 상태는 `checking`, `waiting_input`, `ready`, `running`, `verifying`, `completed`, `failed`로 제한한다. 활성 질문과 실제 도구 실행은 각각 `request_block_id`, `agent_run_id`로 연결한다. `waiting_input`에서는 `resume_status`에 `todo` 또는 `in_progress`를 저장한다.
 - 런타임 테이블에는 재시도, 중복 실행 방지와 프로세스 제어에 필요한 메타데이터만 둔다. 사용자에게 보이는 계획, 질문, 결과와 검증 근거는 블록에 저장한다.
 
 ## 뷰별 투영
@@ -102,13 +103,13 @@ delete(id)
 
 1. 작업 블록의 본문, 하위 블록과 명시적 참조에서 완료 계약을 읽는다.
 2. 결과물, 완료 조건, 제약과 검증 방법이 충분한지 확인한다.
-3. 부족하면 상태를 `todo`로 유지하고 `todo` 전이를 승인한 사용자의 Inbox에 `@사용자`와 작업 `ref`를 포함한 질문 블록을 만든다.
+3. 부족하면 질문 블록 생성과 `todo → blocked`를 같은 트랜잭션에 적용하고 `resume_status=todo`를 기록한다. 질문은 `todo` 전이를 승인한 사용자의 Inbox에 `@사용자`와 작업 `ref`를 포함한다.
 4. 충분하면 기대 `version`을 조건으로 `todo → in_progress`를 원자적으로 적용한다. 선점에 실패한 loop는 종료한다.
 5. 선점한 Developer Agent는 기존 Local Agent 런타임에 `agent_run`을 만들고 그 ID를 `agent_loop`에 연결한다.
-6. 실행 중 사용자 판단이나 외부 변경 승인이 필요하면 `in_progress`를 유지하고 같은 방식으로 Inbox에 요청한 뒤 답글을 기다린다.
+6. 실행 중 사용자 판단이나 외부 변경 승인이 필요하면 요청 생성과 `in_progress → blocked`를 같은 트랜잭션에 적용하고 `resume_status=in_progress`로 답글을 기다린다.
 7. 결과물과 검증 근거를 작업의 자식 블록으로 기록하고 검증을 통과한 뒤에만 `in_progress → done`을 적용한다.
 
-질문에 답이 달리면 원래 요청 블록과 작업 `ref`를 통해 대기 중인 실행을 재개한다. 완료 조건 부족으로 아직 선점하지 않은 작업은 답변을 계약에 반영한 다음 다시 사전 검증한다. 상세 상태 및 실패 계약은 [에이전트 작업 루프](agent-loop-spec.md)를 따른다.
+질문에 답이 달리면 원래 요청 블록과 작업 `ref`를 통해 `blocked`를 기록된 `resume_status`로 원자적으로 복귀시킨다. `todo`로 복귀한 작업은 답변을 계약에 반영한 다음 다시 사전 검증하고, `in_progress`로 복귀한 작업은 같은 실행을 재개한다. 상세 상태 및 실패 계약은 [에이전트 작업 루프](agent-loop-spec.md)를 따른다.
 
 ## 실시간 동기화와 충돌
 

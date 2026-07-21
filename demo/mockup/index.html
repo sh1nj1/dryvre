@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="ko">
+<html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -307,15 +307,17 @@
     .status-chip { display: inline-flex; align-items: center; gap: 5px; margin-left: 7px; padding: 3px 7px; border-radius: 5px; font-size: 9px; font-weight: 760; vertical-align: middle; }
     .status-chip.progress { color: #6f5718; background: var(--yellow-soft); }
     .status-chip.todo { color: #6256bf; background: var(--violet-soft); }
+    .status-chip.blocked { color: #a13d25; background: var(--accent-soft); }
     .status-chip.done { color: #24714f; background: var(--green-soft); }
     .ref-chip { display: inline-flex; align-items: center; gap: 5px; padding: 2px 7px; border-radius: 5px; color: var(--violet); background: var(--violet-soft); font-size: 11px; font-weight: 650; cursor: pointer; }
     /* Board */
-    .board { max-width: 1120px; margin: 0 auto; display: grid; grid-template-columns: repeat(3, minmax(190px, 1fr)); gap: 14px; align-items: start; }
+    .board { max-width: 1320px; margin: 0 auto; display: grid; grid-template-columns: repeat(4, minmax(170px, 1fr)); gap: 14px; align-items: start; }
     .column { min-width: 0; }
     .column-head { display: flex; align-items: center; gap: 8px; padding: 0 4px 12px; font-size: 11px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
     .column-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--violet); }
     .column:nth-child(2) .column-dot { background: var(--yellow); }
-    .column:nth-child(3) .column-dot { background: var(--green); }
+    .column:nth-child(3) .column-dot { background: var(--accent); }
+    .column:nth-child(4) .column-dot { background: var(--green); }
     .column-count { margin-left: auto; color: var(--muted); font-weight: 500; }
     .cards { min-height: 300px; padding: 4px; border-radius: 13px; background: rgba(229, 226, 216, .42); }
     .card { margin-bottom: 8px; padding: 14px; border: 1px solid var(--line); border-radius: 11px; background: var(--panel); box-shadow: 0 4px 14px rgba(45, 44, 39, .045); cursor: grab; transition: .18s ease; }
@@ -477,33 +479,33 @@
       <div class="brand"><span class="brand-mark">D</span> dryvre</div>
       <div class="crumbs"><span>Product Studio</span><span class="crumb-sep">/</span><strong>Build Week Launch</strong></div>
       <div class="top-actions">
-        <button class="icon-btn mobile-tree-btn" aria-label="트리 열기">☰</button>
-        <div class="avatar" title="데모 사용자">SO</div>
+        <button class="icon-btn mobile-tree-btn" aria-label="Open tree">☰</button>
+        <div class="avatar" title="Demo user">SO</div>
       </div>
     </header>
 
     <aside class="sidebar">
       <div class="side-tools">
-        <button class="search" id="open-search" aria-label="검색 및 필터 열기">⌕ <span>Search &amp; filter</span></button>
-        <button class="icon-btn" data-toast="새 블록을 만들 수 있습니다">＋</button>
+        <button class="search" id="open-search" aria-label="Open search and filters">⌕ <span>Search &amp; filter</span></button>
+        <button class="icon-btn" data-toast="Create a new block">＋</button>
       </div>
-      <nav class="tree-wrap" aria-label="블록 트리">
+      <nav class="tree-wrap" aria-label="Block tree">
         <div class="section-label"><span>Tree</span><span>•••</span></div>
         <button class="tree-row"><span class="chev">⌄</span><span class="node-icon">◈</span><span class="node-label">Product Studio</span></button>
-        <button class="tree-row level-1 active" data-node="Build Week Launch"><span class="chev">⌄</span><span class="node-icon">◫</span><span class="node-label">Build Week Launch</span><span class="count out-of-scope" title="MVP 제외: 읽지 않은 항목 롤업">3</span></button>
+        <button class="tree-row level-1 active" data-node="Build Week Launch"><span class="chev">⌄</span><span class="node-icon">◫</span><span class="node-label">Build Week Launch</span><span class="count out-of-scope" title="Out of MVP: unread rollup">3</span></button>
         <button class="tree-row level-2" data-node="Product thesis"><span class="chev"></span><span class="node-icon">¶</span><span class="node-label">Product thesis</span></button>
         <button class="tree-row level-2" data-node="Core experience"><span class="chev">⌄</span><span class="node-icon">◎</span><span class="node-label">Core experience</span></button>
-        <button class="tree-row level-2" data-node="Launch checklist"><span class="chev"></span><span class="node-icon">☑</span><span class="node-label">Launch checklist</span><span class="count out-of-scope" title="MVP 제외: 읽지 않은 항목 롤업">2</span></button>
+        <button class="tree-row level-2" data-node="Launch checklist"><span class="chev"></span><span class="node-icon">☑</span><span class="node-label">Launch checklist</span><span class="count out-of-scope" title="Out of MVP: unread rollup">2</span></button>
         <button class="tree-row level-1" data-node="User research"><span class="chev">›</span><span class="node-icon">◌</span><span class="node-label">User research</span></button>
         <button class="tree-row level-1" data-node="Design system"><span class="chev">›</span><span class="node-icon">◐</span><span class="node-label">Design system</span></button>
         <button class="tree-row level-1" data-node="Decision log"><span class="chev"></span><span class="node-icon">↳</span><span class="node-label">Decision log</span></button>
-        <div class="out-of-scope" style="margin-top:14px;border-radius:9px" title="MVP 제외: 핀과 구독">
+        <div class="out-of-scope" style="margin-top:14px;border-radius:9px" title="Out of MVP: pins and subscriptions">
           <div class="section-label"><span>Pinned</span><span>＋</span></div>
           <button class="tree-row" data-node="OpenAI Build Week"><span class="chev"></span><span class="node-icon">★</span><span class="node-label">OpenAI Build Week</span></button>
           <button class="tree-row" data-node="Weekly review"><span class="chev"></span><span class="node-icon">↗</span><span class="node-label">Weekly review</span></button>
         </div>
       </nav>
-      <div class="side-footer"><div class="sync-status out-of-scope" title="MVP 제외: 실시간 다중 사용자 동기화"><span class="sync-dot"></span>All blocks synced</div></div>
+      <div class="side-footer"><div class="sync-status out-of-scope" title="Out of MVP: real-time multi-user sync"><span class="sync-dot"></span>All blocks synced</div></div>
     </aside>
 
     <main>
@@ -540,7 +542,7 @@
             <div class="doc-block"><span class="drag-handle">⠿</span><h3 class="doc-h3">Launch checklist</h3></div>
             <div class="doc-children">
               <div class="doc-block"><span class="drag-handle">⠿</span><div class="task-line"><span class="check done">✓</span><span class="done-copy">Seed demo workspace</span><span class="status-chip done">Done</span></div></div>
-              <div class="doc-block"><span class="drag-handle">⠿</span><div class="task-line"><span class="check"></span><span>Record the three-minute product story</span><span class="status-chip todo">To do</span></div></div>
+              <div class="doc-block"><span class="drag-handle">⠿</span><div class="task-line"><span class="check"></span><span>Record the three-minute product story</span><span class="status-chip blocked">⏸ Blocked</span></div></div>
             </div>
           </article>
         </section>
@@ -548,11 +550,10 @@
         <section class="view" id="board-view">
           <div class="board">
             <section class="column">
-              <header class="column-head"><span class="column-dot"></span>To do <span class="column-count">2</span></header>
+              <header class="column-head"><span class="column-dot"></span>To do <span class="column-count">1</span></header>
               <div class="cards">
                 <article class="card" data-select="Board status interactions"><div class="card-meta"><span class="card-path">Core experience</span><span class="card-id">#B-14</span></div><h3>Board status interactions</h3><p>Move a block between states without creating a separate task record.</p><div class="card-footer"><span class="mini-avatar">SO</span><span class="comment-count">◉ 2</span></div></article>
-                <article class="card" data-select="Record the three-minute product story"><div class="card-meta"><span class="card-path">Launch checklist</span><span class="card-id">#B-21</span></div><h3>Record the three-minute product story</h3><p>Show one idea moving naturally across all three views.</p><div class="card-footer"><span class="mini-avatar" style="background:var(--violet-soft);color:var(--violet)">MK</span><span class="comment-count">◉ 1</span></div></article>
-                <button class="add-card" data-toast="이 열에 새 태스크 블록을 추가합니다">＋ Add block</button>
+                <button class="add-card" data-toast="Add a task block to this column">＋ Add block</button>
               </div>
             </section>
             <section class="column">
@@ -560,7 +561,14 @@
               <div class="cards">
                 <article class="card selected" data-select="Three views, one tree"><div class="card-meta"><span class="card-path">Core experience</span><span class="card-id">#B-12</span></div><h3>Three views, one tree</h3><p>Render identical blocks as a document, board, and conversation stream.</p><div class="card-footer"><span class="mini-avatar">SO</span><span class="comment-count">◉ 3</span></div></article>
                 <article class="card" data-select="AI writes back into the tree"><div class="card-meta"><span class="card-path">Core experience</span><span class="card-id">#B-18</span></div><h3>AI writes back into the tree</h3><p>Use subtree and references as automatic, visible context.</p><div class="card-footer"><span class="mini-avatar" style="background:var(--ink);color:white">AI</span><span class="comment-count">◉ 4</span></div></article>
-                <button class="add-card" data-toast="이 열에 새 태스크 블록을 추가합니다">＋ Add block</button>
+                <button class="add-card" data-toast="Add a task block to this column">＋ Add block</button>
+              </div>
+            </section>
+            <section class="column">
+              <header class="column-head"><span class="column-dot"></span>Blocked <span class="column-count">1</span></header>
+              <div class="cards">
+                <article class="card" data-select="Record the three-minute product story"><div class="card-meta"><span class="card-path">Launch checklist</span><span class="card-id">#B-21</span></div><h3>Record the three-minute product story</h3><p>Waiting for final approval on the public demo URL.</p><div class="card-footer"><span class="mini-avatar" style="background:var(--violet-soft);color:var(--violet)">MK</span><span class="comment-count">◉ 1</span></div></article>
+                <button class="add-card" data-toast="Add a task block to this column">＋ Add block</button>
               </div>
             </section>
             <section class="column">
@@ -568,7 +576,7 @@
               <div class="cards">
                 <article class="card" data-select="Document tree renderer"><div class="card-meta"><span class="card-path">Core experience</span><span class="card-id">#B-13</span></div><h3>Document tree renderer</h3><p>Nested blocks render as a calm, readable living document.</p><div class="card-footer"><span class="mini-avatar">SO</span><span class="comment-count">◉ 1</span></div></article>
                 <article class="card" data-select="Seed demo workspace"><div class="card-meta"><span class="card-path">Launch checklist</span><span class="card-id">#B-20</span></div><h3>Seed demo workspace</h3><p>A coherent product story, ready when the app opens.</p><div class="card-footer"><span class="mini-avatar" style="background:var(--violet-soft);color:var(--violet)">MK</span><span class="comment-count">◉ 0</span></div></article>
-                <button class="add-card" data-toast="이 열에 새 태스크 블록을 추가합니다">＋ Add block</button>
+                <button class="add-card" data-toast="Add a task block to this column">＋ Add block</button>
               </div>
             </section>
           </div>
@@ -579,10 +587,10 @@
             <div class="stream-focus"><div class="focus-glyph">◎</div><div class="focus-copy"><span>Conversation attached to</span><strong>Core experience / Three views, one tree</strong></div><button class="tool-pill" data-switch="document">Open block ↗</button></div>
             <article class="message"><div class="avatar">SO</div><div><div class="message-head"><strong>Soonoh</strong><span>Today, 14:22</span></div><div class="message-body"><p>The demo should make the ontology obvious without explaining our database. Can we use one launch brief and watch it become work?</p></div><div class="message-actions">Reply · Reference · •••</div></div></article>
             <article class="message"><div class="avatar" style="background:var(--violet-soft);color:var(--violet)">MK</div><div><div class="message-head"><strong>Mina Kim</strong><span>14:28</span></div><div class="message-body"><p>Yes. Keep the selected block fixed while switching views. That makes “same object, different lens” immediately visible.</p></div><div class="message-actions">Reply · Reference · •••</div></div></article>
-            <article class="message agent"><div class="avatar">✦</div><div><div class="message-head"><strong>Dryvre AI</strong><span>14:31 · GPT-5.6</span></div><div class="message-body"><p>I read this subtree and the referenced Build Week criteria. Here is a concise demo sequence written back as child blocks:</p><div class="agent-output"><div class="agent-block">Open in Document and establish the product thesis.</div><div class="agent-block">Switch to Board; move “Three views, one tree” to Done.</div><div class="agent-block">Return here and ask AI to create the launch checklist.</div></div></div><div class="message-actions">3 blocks created · <span class="out-of-scope" style="display:inline-block;padding:1px 3px" title="MVP 제외: op_log 기반 실행 취소">Undo</span> · •••</div></div></article>
+            <article class="message agent"><div class="avatar">✦</div><div><div class="message-head"><strong>Dryvre AI</strong><span>14:31 · GPT-5.6</span></div><div class="message-body"><p>I read this subtree and the referenced Build Week criteria. Here is a concise demo sequence written back as child blocks:</p><div class="agent-output"><div class="agent-block">Open in Document and establish the product thesis.</div><div class="agent-block">Switch to Board; move “Three views, one tree” to Done.</div><div class="agent-block">Return here and ask AI to create the launch checklist.</div></div></div><div class="message-actions">3 blocks created · <span class="out-of-scope" style="display:inline-block;padding:1px 3px" title="Out of MVP: op_log-based undo">Undo</span> · •••</div></div></article>
             <div class="composer">
               <textarea id="composer" placeholder="Write to this block…  Use @ to mention people, agents, or blocks"></textarea>
-              <div class="composer-actions"><span class="context-chip">◎ Three views, one tree</span><button class="tool-pill" data-toast="블록 또는 사람을 참조할 수 있습니다">@ Reference</button><button class="send-btn" id="send-message" aria-label="메시지 보내기">↑</button></div>
+              <div class="composer-actions"><span class="context-chip">◎ Three views, one tree</span><button class="tool-pill" data-toast="Reference a block or person">@ Reference</button><button class="send-btn" id="send-message" aria-label="Send message">↑</button></div>
             </div>
           </div>
         </section>
@@ -594,7 +602,7 @@
       <div class="rail-scroll">
         <div class="inspector-label">Selected block</div>
         <div class="selected-card"><span class="path">Build Week Launch / Core experience</span><h3 id="selected-title">Three views, one tree</h3><p id="selected-description">This block stays selected across every view. Its identity, children, references, and conversation travel with it.</p><div class="selected-meta">Updated 2 minutes ago · Soonoh</div></div>
-        <button class="messages-card" data-switch="stream" aria-label="스트림에서 메시지 3개 보기">
+        <button class="messages-card" data-switch="stream" aria-label="View 3 messages in Stream">
           <span class="messages-icon">◉</span>
           <span class="messages-copy"><strong>3 messages</strong><span>Soonoh, Mina, and Dryvre AI</span></span>
           <span class="messages-arrow">→</span>
@@ -628,7 +636,7 @@
         <div class="filter-title"><span id="search-title">Filter conditions</span><span id="clear-filters">Clear all</span></div>
         <div class="filter-grid">
           <div class="filter-field"><label for="filter-ref">References</label><select id="filter-ref"><option>Any reference</option><option>OpenAI Build Week</option><option>User research</option><option>No references</option></select></div>
-          <div class="filter-field"><label for="filter-status">Status</label><select id="filter-status"><option>Any status</option><option>To do</option><option>In progress</option><option>Done</option><option>Not a task</option></select></div>
+          <div class="filter-field"><label for="filter-status">Status</label><select id="filter-status"><option>Any status</option><option>To do</option><option>In progress</option><option>Blocked</option><option>Done</option><option>Not a task</option></select></div>
           <div class="filter-field"><label for="filter-author">Author</label><select id="filter-author"><option>Anyone</option><option>Soonoh</option><option>Mina Kim</option><option>Dryvre AI</option></select></div>
           <div class="filter-field"><label for="filter-date">Updated</label><select id="filter-date"><option>Any time</option><option>Today</option><option>Past 7 days</option><option>Past 30 days</option></select></div>
         </div>
@@ -669,7 +677,7 @@
     document.querySelectorAll('.tree-row[data-node]').forEach(row => row.addEventListener('click', () => {
       document.querySelectorAll('.tree-row').forEach(el => el.classList.remove('active'));
       row.classList.add('active');
-      showToast(`${row.dataset.node} 블록을 선택했습니다`);
+      showToast(`Selected ${row.dataset.node}`);
     }));
 
     document.querySelectorAll('.check').forEach(box => box.addEventListener('click', event => {
@@ -678,7 +686,7 @@
       box.textContent = box.classList.contains('done') ? '✓' : '';
       const copy = box.nextElementSibling;
       if (copy) copy.classList.toggle('done-copy', box.classList.contains('done'));
-      showToast('같은 블록의 상태가 모든 뷰에 반영됩니다');
+      showToast('The same block status is reflected in every view');
     }));
 
     const toast = document.getElementById('toast');
@@ -694,14 +702,14 @@
     const composer = document.getElementById('composer');
     document.getElementById('send-message').addEventListener('click', () => {
       const text = composer.value.trim();
-      if (!text) return showToast('메시지를 입력해 주세요');
+      if (!text) return showToast('Enter a message');
       const article = document.createElement('article');
       article.className = 'message';
       article.innerHTML = `<div class="avatar">SO</div><div><div class="message-head"><strong>Soonoh</strong><span>Just now</span></div><div class="message-body"><p></p></div><div class="message-actions">Reply · Reference · •••</div></div>`;
       article.querySelector('p').textContent = text;
       document.querySelector('.composer').before(article);
       composer.value = '';
-      showToast('메시지가 자식 블록으로 추가됐습니다');
+      showToast('Message added as a child block');
     });
     composer.addEventListener('keydown', event => {
       if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) document.getElementById('send-message').click();
@@ -723,7 +731,7 @@
     });
     document.getElementById('apply-search').addEventListener('click', () => {
       closeSearch();
-      showToast('검색 조건을 현재 트리에 적용했습니다');
+      showToast('Search filters applied to the current tree');
     });
   </script>
 </body>
