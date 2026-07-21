@@ -2,6 +2,10 @@
 
 Dryvre is a single tree of first-class Markdown blocks, rendered as a document, task board, or conversation stream. References serve as links, tags, and AI context at once.
 
+## Demo
+
+[Watch the Dryvre demo on YouTube](https://www.youtube.com/watch?v=eJ5yBZEZz_c)
+
 ## Documentation
 
 - [Documentation index](docs/README.md)
