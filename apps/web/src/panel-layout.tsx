@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type KeyboardEvent, type PointerEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react';
 import type { ViewMode } from './model';
 
 const STORAGE_KEY = 'dryvre.panel-widths.v1';
@@ -84,7 +84,17 @@ export function usePanelLayout(view: ViewMode) {
     return () => window.removeEventListener('resize', updateViewport);
   }, []);
 
+  // Persist only user-driven changes. The initial `widths` is viewport-derived
+  // (defaults() falls back to compact values at <=1100px, and resizers are hidden
+  // below 850px), so writing it on mount would store a value the user never chose
+  // and later mask the desktop defaults. `widths` only mutates through the
+  // resize/reset handlers below, so skipping the first run persists preferences only.
+  const persisted = useRef(false);
   useEffect(() => {
+    if (!persisted.current) {
+      persisted.current = true;
+      return;
+    }
     localStorage.setItem(STORAGE_KEY, JSON.stringify(widths));
   }, [widths]);
 
