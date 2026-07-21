@@ -92,15 +92,27 @@ export function blockSummary(block: Pick<DryvreBlock, 'bodyMd'>) {
   return ATX_HEADING.test(line) ? rest.replace(/^(?:[ \t]*\r?\n)+/, '') : bodyMd;
 }
 
+// A single-line CommonMark link reference definition (`[label]: dest "title"`),
+// with up to 3 leading spaces (4+ is indented code). These render to nothing but
+// supply targets for reference-style links.
+const REF_DEFINITION = /^ {0,3}\[[^\]]+\]:\s+\S.*$/gm;
+
 // Markdown for a block's projected heading. When the body starts with an ATX
 // heading, return that original line verbatim so its level (# vs ###) and inline
 // formatting (code, links, emphasis) are preserved; otherwise synthesize a
 // level-2 heading from the fallback title. Rendering the result in heading
 // context keeps inline formatting while stopping a title like `1. Foo` from
-// being reparsed as a list.
+// being reparsed as a list. The heading is projected in isolation, so a
+// reference-style link (`# [Spec][spec]`) would lose its definition living
+// elsewhere in the body; carry the body's reference definitions along so those
+// links still resolve. Unused definitions render to nothing, so this can never
+// add visible output.
 export function headingMarkdown(block: Pick<DryvreBlock, 'title' | 'bodyMd'>) {
-  const { line } = firstContentLine(block.bodyMd ?? '');
-  return ATX_HEADING.test(line) ? line : `## ${blockTitle(block)}`;
+  const bodyMd = block.bodyMd ?? '';
+  const { line } = firstContentLine(bodyMd);
+  const heading = ATX_HEADING.test(line) ? line : `## ${blockTitle(block)}`;
+  const defs = bodyMd.match(REF_DEFINITION);
+  return defs ? `${heading}\n\n${defs.join('\n')}` : heading;
 }
 
 export function blockPath(blockId: string, blocks: DryvreBlock[]) {

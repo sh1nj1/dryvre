@@ -519,3 +519,34 @@ test('renders inline Markdown in a task block title, not raw source', async ({ p
   await expect(title).not.toContainText('`');
   await expect(title).not.toContainText('](');
 });
+
+test('resolves a reference-style link in a heading whose definition lives in the body', async ({ page }) => {
+  const rootId = '00000000-0000-4000-8000-000000000010';
+  const authorId = '00000000-0000-4000-8000-000000000001';
+  // A reference-style link in the heading; its definition lives later in the body.
+  // The heading is projected in isolation, so the definition must ride along.
+  const root = {
+    id: rootId,
+    parentId: null,
+    path: `/${rootId}/`,
+    rank: 'a',
+    bodyMd: '# See the [spec][s]\n\nShip when green.\n\n[s]: https://example.com',
+    status: null,
+    authorId,
+    version: 0,
+    createdAt: '2026-07-22T00:00:00.000Z',
+    updatedAt: '2026-07-22T00:00:00.000Z',
+  };
+
+  await page.route('**/api/**', async (route) => {
+    const url = new URL(route.request().url());
+    if (url.pathname === `/api/trees/${rootId}`) return route.fulfill({ json: { blocks: [root] } });
+    return route.fulfill({ status: 404, json: { error: 'Not found' } });
+  });
+
+  await page.goto('/');
+  const heading = page.locator('.doc-sheet h1').first();
+  // The reference-style link must resolve to an <a>, not leak the raw `[spec][s]` source.
+  await expect(heading.getByRole('link', { name: 'spec' })).toHaveAttribute('href', 'https://example.com');
+  await expect(heading).not.toContainText('][');
+});

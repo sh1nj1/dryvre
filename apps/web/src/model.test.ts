@@ -77,4 +77,17 @@ describe('Markdown block projections', () => {
     // An empty heading is not a heading, so it falls back rather than emitting `# `.
     expect(headingMarkdown({ title: 'Stored', bodyMd: '#\nDetails' })).toBe('## Stored');
   });
+
+  it('carries reference-style link definitions into the isolated heading', () => {
+    // A reference link in the heading points at a definition elsewhere in the
+    // body; the isolated projection would lose it, so the definition rides along
+    // (it renders to nothing, so it never adds visible output).
+    expect(headingMarkdown({ title: 'x', bodyMd: '# [Spec][spec]\n\n[spec]: https://example.com' })).toBe(
+      '# [Spec][spec]\n\n[spec]: https://example.com',
+    );
+    // No reference definitions: the heading is returned unchanged.
+    expect(headingMarkdown({ title: 'x', bodyMd: '# Plain\n\nbody text' })).toBe('# Plain');
+    // A 4-space indent makes it code, not a definition, so it is not carried.
+    expect(headingMarkdown({ title: 'x', bodyMd: '# Title\n\n    [not]: a-def' })).toBe('# Title');
+  });
 });
