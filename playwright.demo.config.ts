@@ -25,7 +25,7 @@ export default defineConfig({
       VITE_DEV_HOST: '127.0.0.1',
       VITE_DEV_API_TARGET: 'http://127.0.0.1:3100',
     },
-    url: 'http://127.0.0.1:3100/api/health',
+    url: 'http://127.0.0.1:5273/app',
     timeout: 120_000,
     reuseExistingServer: false,
   },

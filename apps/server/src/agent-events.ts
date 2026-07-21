@@ -155,7 +155,8 @@ export function createAgentEventRuntime(
 
   function contractNeedsInput(context: string) {
     const required = ['Deliverable:', 'Completion criteria:', 'Constraints:', 'Verification:', '@Developer Agent'];
-    return /\bTBD\b/i.test(context) || required.some((field) => !context.includes(field));
+    const unresolvedApproval = /\*\*Public URL approval:\*\*\s*TBD/i.test(context) && !/\b(?:approved|approve|yes|allow|proceed)\b/i.test(context);
+    return unresolvedApproval || required.some((field) => !context.includes(field));
   }
 
   async function beginTaskLoop(definition: TriggerDefinition, task: typeof blocks.$inferSelect, requestedBy: string) {
@@ -313,12 +314,16 @@ export function createAgentEventRuntime(
       if (!task || task.status !== 'blocked') continue;
       const agentAuthorId = await agentRuntime.subjectFor(loop.agentBlockId);
       const emissions = await db.transaction(async (tx) => {
+        const approvalEvidence = await applyOperationInTransaction(tx, {
+          clientOpId: randomUUID(),
+          op: { type: 'create', id: randomUUID(), parentId: task.id, bodyMd: `## Approval response\n\n${source.bodyMd}`, stream: false },
+        }, agentAuthorId);
         const resumed = await applyOperationInTransaction(tx, {
           clientOpId: randomUUID(),
           op: { type: 'setStatus', id: task.id, status: loop.resumeStatus ?? 'todo', version: task.version },
         }, agentAuthorId);
         await tx.update(agentLoops).set({ state: 'ready', resumeStatus: null, updatedAt: new Date() }).where(eq(agentLoops.id, loop.id));
-        return [resumed];
+        return [approvalEvidence, resumed];
       });
       emissions.forEach(emit);
       const refreshed = await db.query.blocks.findFirst({ where: eq(blocks.id, task.id) });

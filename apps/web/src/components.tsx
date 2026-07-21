@@ -139,12 +139,12 @@ export function BoardView({ blocks, messages, selectedId, onSelect, onStatus }: 
   })}</div>;
 }
 
-export function StreamView({ selected, messages, focusedMessageId, agents, agentTarget, live, liveMessage, onSend, onAgentSent }: { selected: DryvreBlock; messages: BlockMessage[]; focusedMessageId: string | undefined; agents: Block[]; agentTarget: Block | undefined; live: boolean; liveMessage: WsServerMessage | undefined; onSend: (body: string) => void; onAgentSent: (targetId: string, resultBlockId?: string) => void }) {
+export function StreamView({ selected, messages, focusedMessageId, agents, agentTarget, live, liveMessage, onSend, onAgentSent }: { selected: DryvreBlock; messages: BlockMessage[]; focusedMessageId: string | undefined; agents: Block[]; agentTarget: Block | undefined; live: boolean; liveMessage: WsServerMessage | undefined; onSend: (body: string, parentId?: string) => void; onAgentSent: (targetId: string, resultBlockId?: string) => void }) {
   const focusedMessage = useRef<HTMLElement>(null);
   useEffect(() => { focusedMessage.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }); }, [focusedMessageId, messages]);
   return <div className="stream-layout">
     {messages.length ? messages.map((message) => <article ref={message.id === focusedMessageId ? focusedMessage : undefined} className={`message ${message.agent ? 'agent' : ''} ${message.id === focusedMessageId ? 'result-focus' : ''}`} key={message.id}><div className="avatar">{message.initials}</div><div><div className="message-head"><strong>{message.author}</strong><span>{message.timeLabel}</span></div><div className="message-body"><p>{message.body}</p>{message.createdBlocks && <div className="agent-output">{message.createdBlocks.map((body) => <div className="agent-block" key={body}>{body}</div>)}</div>}</div><div className="message-actions">Reply · Reference · •••</div></div></article>) : <div className="empty-stream"><strong>No messages yet</strong><span>Start a conversation in this block.</span></div>}
-    <StreamComposer selected={selected} agents={agents} target={agentTarget} live={live} liveMessage={liveMessage} onSend={onSend} onSent={onAgentSent} />
+    <StreamComposer selected={selected} agents={agents} target={agentTarget} live={live} liveMessage={liveMessage} onSend={(body) => onSend(body, messages.find((message) => /^## Approval required\b/i.test(message.body))?.id)} onSent={onAgentSent} />
   </div>;
 }
 
