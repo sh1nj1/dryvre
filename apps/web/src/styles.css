@@ -163,6 +163,7 @@ button { cursor: pointer; }
 .empty-stream span { margin-top: 6px; font-size: 10px; }
 .composer { position: sticky; bottom: 0; margin-top: 28px; padding: 11px; border: 1px solid #cfcbc0; border-radius: 13px; background: var(--panel); box-shadow: 0 15px 35px rgba(45, 44, 39, .12); }
 .composer textarea { width: 100%; height: 52px; padding: 4px 5px; border: 0; outline: 0; resize: none; color: var(--ink); background: transparent; font-size: 14px; }
+.composer-shortcut-hint { margin: -2px 5px 7px; color: #aaa79f; font-size: 9px; text-align: right; }
 .composer-actions { display: flex; align-items: center; gap: 7px; }
 .composer-context { min-width: 0; margin-bottom: 8px; display: flex; align-items: center; gap: 7px; color: var(--muted); font-size: 9px; }
 .composer-context > span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
