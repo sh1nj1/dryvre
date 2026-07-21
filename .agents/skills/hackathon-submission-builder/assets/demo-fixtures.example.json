@@ -1,0 +1,12 @@
+{
+  "localStorage": {"hackathonDemo": "true"},
+  "routes": [
+    {
+      "url": "**/api/demo",
+      "method": "GET",
+      "status": 200,
+      "contentType": "application/json",
+      "json": {"mode": "fixture", "items": []}
+    }
+  ]
+}

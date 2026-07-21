@@ -36,6 +36,10 @@ beforeAll(async () => {
     DATABASE_URL: container.getConnectionUri(),
     SESSION_SECRET: 'e2e-only-secret-at-least-32-characters',
     OPENAI_MODEL: 'gpt-5.6',
+    CODEX_COMMAND: 'codex',
+    DRYVRE_AGENT_DATA_DIR: '.dryvre-data/e2e-agent-runtime',
+    DRYVRE_AGENT_TIMEOUT_MS: 1_000,
+    DRYVRE_AGENT_FAKE: true,
   };
   app = await buildApp(config);
   origin = await app.listen({ host: '127.0.0.1', port: 0 });
@@ -87,5 +91,24 @@ describe('Dryvre API with PostgreSQL', () => {
     const treeResponse = await fetch(`${origin}/api/trees/${ROOT_ID}`);
     const tree = await treeResponse.json() as { blocks: Array<{ id: string; bodyMd: string; version: number }> };
     expect(tree.blocks).toContainEqual(expect.objectContaining({ id: blockId, bodyMd: 'Edited through the full HTTP stack', version: 1 }));
+  });
+
+  it('runs a seeded Agent against a server-backed target block', async () => {
+    const response = await post('/api/agent-runs', {
+      agentBlockId: '00000000-0000-4000-8000-000000000020',
+      targetBlockId: ROOT_ID,
+      prompt: 'Verify the server-backed Agent flow.',
+      resume: true,
+    });
+    expect(response.status).toBe(202);
+    let run = await response.json() as { id: string; status: string };
+    for (let attempt = 0; attempt < 20 && ['queued', 'running'].includes(run.status); attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 25));
+      run = await fetch(`${origin}/api/agent-runs/${run.id}`).then((result) => result.json()) as typeof run;
+    }
+    expect(run.status).toBe('succeeded');
+
+    const tree = await fetch(`${origin}/api/trees/${ROOT_ID}`).then((result) => result.json()) as { blocks: Array<{ bodyMd: string }> };
+    expect(tree.blocks).toContainEqual(expect.objectContaining({ bodyMd: expect.stringContaining('Verify the server-backed Agent flow.') }));
   });
 });

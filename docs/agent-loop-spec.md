@@ -48,7 +48,7 @@ in_progress --결과 기록 + 검증 성공--> done
 - 실행 중 사용자 판단이 필요하면 `in_progress`를 유지한 채 기다린다.
 - 결과 블록과 검증 근거가 없거나 검증이 실패하면 `done`으로 바꾸지 않는다.
 
-`todo → in_progress`는 작업의 기대 `version`을 포함한 조건부 연산으로 한 번만 성공해야 한다. 동일한 상태 이벤트의 재전달은 같은 실행을 중복 생성하지 않는다.
+`todo → in_progress`는 작업의 기대 `version`을 포함한 조건부 연산으로 한 번만 성공해야 한다. 작업 활성화부터 검증과 사용자 입력 대기까지는 `(task_block_id, trigger_version)`으로 유일한 `agent_loop`에 기록한다. 실제 도구 실행이 시작될 때만 기존 Local Agent 런타임의 `agent_run`을 만들고 loop에 연결하므로, 동일한 상태 이벤트가 재전달되어도 loop나 프로세스를 중복 생성하지 않는다.
 
 ## 실행 전 검증
 

@@ -1,4 +1,4 @@
-import type { Block, BlockOp, OpEnvelope } from '@dryvre/shared';
+import type { AgentRun, Block, BlockOp, CreateAgentRun, OpEnvelope } from '@dryvre/shared';
 
 const apiBase = import.meta.env.VITE_API_URL ?? '';
 
@@ -12,6 +12,10 @@ export const api = {
   tree: (id: string, query = '') => request<{ blocks: Block[] }>(`/api/trees/${id}${query ? `?q=${encodeURIComponent(query)}` : ''}`),
   apply: (op: BlockOp) => request('/api/ops', { method: 'POST', body: JSON.stringify({ clientOpId: crypto.randomUUID(), op } satisfies OpEnvelope) }),
   askAi: (blockId: string, prompt: string) => request('/api/ai/respond', { method: 'POST', body: JSON.stringify({ blockId, prompt }) }),
+  validateAgent: (blockId: string) => request<{ valid: true; agent: { slug: string }; skills: Array<{ slug: string; files: number }> }>(`/api/agents/${blockId}/validate`, { method: 'POST', body: '{}' }),
+  startAgentRun: (input: CreateAgentRun) => request<AgentRun>('/api/agent-runs', { method: 'POST', body: JSON.stringify(input) }),
+  agentRun: (id: string) => request<AgentRun>(`/api/agent-runs/${id}`),
+  cancelAgentRun: (id: string) => request<AgentRun>(`/api/agent-runs/${id}/cancel`, { method: 'POST' }),
 };
 
 export function connectLive(onChange: () => void, onStatus: (online: boolean) => void) {
