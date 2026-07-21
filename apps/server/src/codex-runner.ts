@@ -84,6 +84,7 @@ export function buildManagedCodexConfig(mcpEntry: string) {
     `args = [${JSON.stringify(mcpEntry)}]`,
     'env_vars = ["DRYVRE_URL", "DRYVRE_SESSION"]',
     'enabled_tools = ["dryvre_read_tree", "dryvre_create_block", "dryvre_edit_block"]',
+    'default_tools_approval_mode = "approve"',
     "startup_timeout_sec = 10.0",
     "tool_timeout_sec = 60.0",
     "",
