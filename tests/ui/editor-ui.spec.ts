@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 
 test('keeps view navigation in the topbar and removes redundant chrome', async ({ page }) => {
-  await page.goto('/');
+  await page.goto('/app');
 
   const topbar = page.locator('.topbar');
   await expect(topbar.getByRole('tablist', { name: 'View mode' })).toBeVisible();
@@ -51,7 +51,7 @@ test('keeps the newest stream message at the bottom after sending', async ({ pag
     return route.fulfill({ status: 404, json: { error: 'Not found' } });
   });
 
-  await page.goto('/');
+  await page.goto('/app');
   await page.getByRole('tab', { name: /Stream/ }).click();
   await expect(page.locator('.message')).toHaveCount(1);
   await page.getByPlaceholder('Write to this block').fill('Newest message');
@@ -63,7 +63,7 @@ test('keeps the newest stream message at the bottom after sending', async ({ pag
 });
 
 test('inserts and edits a block from the hover affordance', async ({ page }) => {
-  await page.goto('/');
+  await page.goto('/app');
 
   const blocks = page.locator('.doc-block');
   const initialCount = await blocks.count();
@@ -84,7 +84,7 @@ test('inserts and edits a block from the hover affordance', async ({ page }) => 
 });
 
 test('Alt+Enter creates an empty sibling without splitting the current body', async ({ page }) => {
-  await page.goto('/');
+  await page.goto('/app');
 
   const originalBody = 'Document for knowledge, board for execution, stream for discussion. Switching views never changes the underlying structure.';
   const blocks = page.locator('.doc-block');
@@ -102,7 +102,7 @@ test('Alt+Enter creates an empty sibling without splitting the current body', as
 
 test('uses a compact view selector and tree drawer on mobile', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto('/');
+  await page.goto('/app');
 
   await expect(page.locator('.topbar .view-switcher')).toBeHidden();
   const viewSelect = page.getByRole('combobox', { name: 'View mode' });
@@ -117,7 +117,7 @@ test('uses a compact view selector and tree drawer on mobile', async ({ page }) 
 });
 
 test('renders blocked as a first-class board and search status', async ({ page }) => {
-  await page.goto('/');
+  await page.goto('/app');
 
   await page.getByRole('tab', { name: /Board/ }).click();
   await expect(page.locator('.column')).toHaveCount(4);
@@ -201,7 +201,7 @@ test('runs a ready Local Agent, focuses its result, and can cancel another run',
     return route.fulfill({ status: 404, json: { error: 'Not found' } });
   });
 
-  await page.goto('/');
+  await page.goto('/app');
   await expect.poll(() => page.evaluate(() => (window as unknown as { __dryvreMaxLiveSockets: number }).__dryvreMaxLiveSockets)).toBe(1);
   await expect(page.locator('.context-rail textarea')).toHaveCount(0);
   await page.locator('.tree-row').filter({ hasText: 'Demo target' }).click();
