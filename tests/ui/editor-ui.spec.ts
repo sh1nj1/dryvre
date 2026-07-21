@@ -354,3 +354,53 @@ test('keeps message send and cancel available for an in-flight run off its targe
   await cancelButton.click();
   await expect(cancelButton).toHaveCount(0);
 });
+
+test('keeps the mode picker selectable during an in-flight run on a valid target', async ({ page }) => {
+  const rootId = '00000000-0000-4000-8000-000000000010';
+  const targetId = '00000000-0000-4000-8000-000000000011';
+  const productId = '00000000-0000-4000-8000-000000000020';
+  const runId = '00000000-0000-4000-8000-000000000081';
+  const createdAt = new Date('2026-07-21T00:00:00.000Z').toISOString();
+  const block = (id: string, parentId: string | null, path: string, rank: string | null, bodyMd: string) => ({ id, parentId, path, rank, bodyMd, status: null, authorId: '00000000-0000-4000-8000-000000000001', version: 0, createdAt, updatedAt: createdAt });
+  const blocks = [
+    block(rootId, null, `/${rootId}/`, 'a', '# Dryvre'),
+    block(targetId, rootId, `/${rootId}/${targetId}/`, 'a', '# Demo target'),
+    block(productId, rootId, `/${rootId}/${productId}/`, 'b', '# @agent product-engineer\nImplement focused changes.'),
+    block('00000000-0000-4000-8000-000000000021', productId, `/${rootId}/${productId}/config/`, 'a', '```agent-config\n{"workspace":"dryvre"}\n```'),
+  ];
+  let cancelled = false;
+  await page.route('**/api/**', async (route) => {
+    const request = route.request();
+    const url = new URL(request.url());
+    if (url.pathname === `/api/trees/${rootId}`) return route.fulfill({ json: { blocks } });
+    if (url.pathname === '/api/agents/readiness') return route.fulfill({ json: { ready: true, mode: 'fake', version: 'fake' } });
+    if (/^\/api\/agents\/.+\/validate$/.test(url.pathname)) return route.fulfill({ json: { valid: true, agent: { slug: 'demo' }, skills: [] } });
+    if (url.pathname === '/api/agent-runs' && request.method() === 'POST') return route.fulfill({ status: 202, json: { id: runId, agentBlockId: productId, targetBlockId: targetId, requestedBy: '00000000-0000-4000-8000-000000000001', status: 'queued', codexSessionId: null, startedAt: null, finishedAt: null, errorCode: null } });
+    if (url.pathname === `/api/agent-runs/${runId}/cancel`) { cancelled = true; return route.fulfill({ json: { id: runId, agentBlockId: productId, targetBlockId: targetId, requestedBy: '00000000-0000-4000-8000-000000000001', status: 'cancelled', codexSessionId: null, startedAt: createdAt, finishedAt: createdAt, errorCode: 'cancelled' } }); }
+    if (url.pathname === `/api/agent-runs/${runId}` && request.method() === 'GET') {
+      const status = cancelled ? 'cancelled' : 'running';
+      return route.fulfill({ json: { id: runId, agentBlockId: productId, targetBlockId: targetId, requestedBy: '00000000-0000-4000-8000-000000000001', status, codexSessionId: null, startedAt: createdAt, finishedAt: cancelled ? createdAt : null, errorCode: cancelled ? 'cancelled' : null } });
+    }
+    return route.fulfill({ status: 404, json: { error: 'Not found' } });
+  });
+
+  await page.goto('/');
+  await page.locator('.tree-row').filter({ hasText: 'Demo target' }).click();
+  await page.getByRole('tab', { name: /Stream/ }).click();
+  await page.getByLabel('Send as').selectOption(productId);
+  await page.getByPlaceholder('Write to this block… Use @ to mention people, agents, or blocks').fill('Long running task.');
+  await page.getByRole('button', { name: 'Run Agent' }).click();
+  await expect(page.locator('.run-state')).toBeVisible();
+
+  // Still on the valid target: the mode picker must stay enabled so the user can drop
+  // back to Message mode and send a normal stream message without cancelling the run.
+  const modePicker = page.getByLabel('Send as');
+  await expect(modePicker).toBeEnabled();
+  await modePicker.selectOption('');
+  const sendButton = page.getByRole('button', { name: 'Send message' });
+  await expect(sendButton).toBeVisible();
+  await page.getByPlaceholder('Write to this block… Use @ to mention people, agents, or blocks').fill('A normal message mid-run.');
+  await expect(sendButton).toBeEnabled();
+  // The in-flight run stays observable and cancellable throughout.
+  await expect(page.getByRole('button', { name: 'Cancel' })).toBeVisible();
+});
