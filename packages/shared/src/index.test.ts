@@ -101,11 +101,15 @@ describe("agent and skill contracts", () => {
     const later = baseBlock({ id: "00000000-0000-4000-8000-000000000002", parentId: root.id, path: "/root/later/", rank: "b" });
     const earlier = baseBlock({ id: "00000000-0000-4000-8000-000000000003", parentId: root.id, path: "/root/earlier/", rank: "a" });
     const nested = baseBlock({ id: "00000000-0000-4000-8000-000000000004", parentId: earlier.id, path: "/root/earlier/nested/", rank: "a" });
-    expect(sortBlocksInDocumentOrder([later, nested, root, earlier]).map((block) => block.id)).toEqual([
+    const olderMessage = baseBlock({ id: "ffffffff-ffff-4fff-8fff-ffffffffffff", parentId: root.id, path: "/root/older-message/", rank: null, createdAt: "2026-07-22T01:00:00.000Z" });
+    const newerMessage = baseBlock({ id: "00000000-0000-4000-8000-000000000005", parentId: root.id, path: "/root/newer-message/", rank: null, createdAt: "2026-07-22T02:00:00.000Z" });
+    expect(sortBlocksInDocumentOrder([newerMessage, later, nested, olderMessage, root, earlier]).map((block) => block.id)).toEqual([
       root.id,
       earlier.id,
       nested.id,
       later.id,
+      olderMessage.id,
+      newerMessage.id,
     ]);
   });
 

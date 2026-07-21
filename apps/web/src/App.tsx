@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { parseBlockDirective, type Block } from '@dryvre/shared';
+import { parseBlockDirective, sortBlocksInDocumentOrder, type Block } from '@dryvre/shared';
 import { api } from './api';
 import { dryvreDataSource } from './data-source';
 import { BoardView, ContextRail, DocumentView, SearchDialog, Sidebar, StreamView, Topbar } from './components';
@@ -59,7 +59,7 @@ export default function App() {
 
   const refreshServerTree = useCallback(async (focusId?: string, revealStream = false) => {
     try {
-      const next = (await api.tree(ROOT_ID)).blocks;
+      const next = sortBlocksInDocumentOrder((await api.tree(ROOT_ID)).blocks);
       const focus = focusId && next.some((block) => block.id === focusId) ? focusId : ROOT_ID;
       setServerBlocks(next);
       setSnapshot(toServerSnapshot(next));
