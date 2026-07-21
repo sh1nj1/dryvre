@@ -101,6 +101,25 @@ describe('Dryvre API with PostgreSQL', () => {
     expect(tree.blocks).toContainEqual(expect.objectContaining({ id: blockId, bodyMd: 'Edited through the full HTTP stack', version: 1 }));
   });
 
+  it('returns stream messages in creation order even when UUID order is reversed', async () => {
+    const olderId = 'ffffffff-ffff-4fff-8fff-fffffffffffe';
+    const newerId = '00000000-0000-4000-8000-000000000099';
+    const createMessage = (id: string, bodyMd: string) => post('/api/ops', {
+      clientOpId: randomUUID(),
+      op: { type: 'create', id, parentId: ROOT_ID, bodyMd, stream: true },
+    });
+    await expect(createMessage(olderId, 'Older stream message')).resolves.toHaveProperty('status', 200);
+    await expect(createMessage(newerId, 'Newer stream message')).resolves.toHaveProperty('status', 200);
+
+    const tree = await fetch(`${origin}/api/trees/${ROOT_ID}`).then((result) => result.json()) as {
+      blocks: Array<{ id: string; parentId: string | null; rank: string | null }>;
+    };
+    expect(tree.blocks
+      .filter((block) => block.parentId === ROOT_ID && block.rank === null)
+      .map((block) => block.id))
+      .toEqual([olderId, newerId]);
+  });
+
   it('runs two seeded Agents with shared Skills and publishes live completion events', async () => {
     await expect(fetch(`${origin}/api/agents/readiness`).then((result) => result.json())).resolves.toEqual({ ready: true, mode: 'fake', version: 'fake' });
 

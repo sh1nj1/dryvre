@@ -16,6 +16,52 @@ test('keeps view navigation in the topbar and removes redundant chrome', async (
   await expect(page.locator('.context-chip')).toContainText('Three views, one tree');
 });
 
+test('keeps the newest stream message at the bottom after sending', async ({ page }) => {
+  const rootId = '00000000-0000-4000-8000-000000000010';
+  const olderId = 'ffffffff-ffff-4fff-8fff-ffffffffffff';
+  const newerId = '00000000-0000-4000-8000-000000000001';
+  const authorId = '00000000-0000-4000-8000-000000000001';
+  const block = (id: string, parentId: string | null, rank: string | null, bodyMd: string, createdAt: string) => ({
+    id,
+    parentId,
+    path: parentId ? `/${rootId}/${id}/` : `/${rootId}/`,
+    rank,
+    bodyMd,
+    status: null,
+    authorId,
+    version: 0,
+    createdAt,
+    updatedAt: createdAt,
+  });
+  const root = block(rootId, null, 'a', '# Stream test', '2026-07-22T00:00:00.000Z');
+  const older = block(olderId, rootId, null, 'Older message', '2026-07-22T01:00:00.000Z');
+  const newer = block(newerId, rootId, null, 'Newest message', '2026-07-22T02:00:00.000Z');
+  let sent = false;
+
+  await page.route('**/api/**', async (route) => {
+    const request = route.request();
+    const url = new URL(request.url());
+    if (url.pathname === `/api/trees/${rootId}`) {
+      return route.fulfill({ json: { blocks: sent ? [newer, root, older] : [older, root] } });
+    }
+    if (url.pathname === '/api/ops' && request.method() === 'POST') {
+      sent = true;
+      return route.fulfill({ json: { sequence: 1 } });
+    }
+    return route.fulfill({ status: 404, json: { error: 'Not found' } });
+  });
+
+  await page.goto('/');
+  await page.getByRole('tab', { name: /Stream/ }).click();
+  await expect(page.locator('.message')).toHaveCount(1);
+  await page.getByPlaceholder('Write to this block').fill('Newest message');
+  await page.getByRole('button', { name: 'Send message' }).click();
+
+  await expect(page.locator('.message')).toHaveCount(2);
+  await expect(page.locator('.message').nth(0)).toContainText('Older message');
+  await expect(page.locator('.message').nth(1)).toContainText('Newest message');
+});
+
 test('inserts and edits a block from the hover affordance', async ({ page }) => {
   await page.goto('/');
 

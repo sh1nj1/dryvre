@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { parseBlockDirective, type Block, type WsServerMessage } from '@dryvre/shared';
+import { parseBlockDirective, sortBlocksInDocumentOrder, type Block, type WsServerMessage } from '@dryvre/shared';
 import { api, connectLive } from './api';
 import { dryvreDataSource } from './data-source';
 import { BoardView, ContextRail, DocumentView, SearchDialog, Sidebar, StreamView, Topbar } from './components';
@@ -60,7 +60,7 @@ export default function App() {
   const [liveMessage, setLiveMessage] = useState<WsServerMessage>();
 
   const syncServerTree = useCallback(async () => {
-    const next = (await api.tree(ROOT_ID)).blocks;
+    const next = sortBlocksInDocumentOrder((await api.tree(ROOT_ID)).blocks);
     setServerBlocks(next);
     setSnapshot(toServerSnapshot(next));
     setServerBacked(true);
