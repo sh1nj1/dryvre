@@ -390,6 +390,10 @@ export async function createAgentRuntime(
         })),
       };
     },
+    async subjectFor(agentBlockId: string) {
+      const { definition } = await readDefinition(agentBlockId);
+      return ensureAgentSubject(agentBlockId, definition.slug);
+    },
     async start(input: CreateAgentRun, requestedBy: string) {
       if (activeAgents.has(input.agentBlockId)) throw new Error("agent_busy");
       if (activeAgents.size >= 2) throw new Error("runner_busy");

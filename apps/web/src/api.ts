@@ -9,7 +9,8 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export const api = {
-  tree: (id: string, query = '') => request<{ blocks: Block[] }>(`/api/trees/${id}${query ? `?q=${encodeURIComponent(query)}` : ''}`),
+  tree: (id: string, query = '') => request<{ blocks: Block[]; references?: Array<{ fromId: string; toId: string }> }>(`/api/trees/${id}${query ? `?q=${encodeURIComponent(query)}` : ''}`),
+  inbox: () => request<{ subjectId: string; blockId: string }>('/api/me/inbox'),
   apply: (op: BlockOp) => request('/api/ops', { method: 'POST', body: JSON.stringify({ clientOpId: crypto.randomUUID(), op } satisfies OpEnvelope) }),
   askAi: (blockId: string, prompt: string) => request('/api/ai/respond', { method: 'POST', body: JSON.stringify({ blockId, prompt }) }),
   validateAgent: (blockId: string) => request<{ valid: true; agent: { slug: string }; skills: Array<{ slug: string; files: number }> }>(`/api/agents/${blockId}/validate`, { method: 'POST', body: '{}' }),

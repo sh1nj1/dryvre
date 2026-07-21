@@ -66,6 +66,7 @@ npm run typecheck    # all workspace type checks
 npm test             # shared contract tests
 npm run test:e2e     # real PostgreSQL + HTTP/WebSocket tests via Testcontainers
 npm run test:e2e:web # Chromium UI tests via Playwright
+npm run test:e2e:demo # real server + PostgreSQL + deterministic Agent browser scenario
 npm run test:smoke:codex # real Codex + Dryvre MCP smoke (Docker and Codex login required)
 npm run lint
 npm run build        # production server, SPA, and MCP artifacts

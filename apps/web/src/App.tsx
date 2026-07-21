@@ -9,12 +9,14 @@ import { ROOT_ID } from './use-tree';
 import './styles.css';
 
 const HUMAN_ID = '00000000-0000-4000-8000-000000000001';
+const LAUNCH_ID = '00000000-0000-4000-8000-000000000120';
 
 function titleOf(block: Block) {
   return block.bodyMd.replace(/^#+\s*/, '').split('\n')[0] || 'Untitled';
 }
 
-function toServerSnapshot(blocks: Block[]): DryvreSnapshot {
+function toServerSnapshot(blocks: Block[], references: Array<{ fromId: string; toId: string }> = []): DryvreSnapshot {
+  const byId = new Map(blocks.map((block) => [block.id, block]));
   return {
     rootId: ROOT_ID,
     focusedRootId: ROOT_ID,
@@ -39,8 +41,12 @@ function toServerSnapshot(blocks: Block[]): DryvreSnapshot {
       body: block.bodyMd,
       timeLabel: new Date(block.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       agent: block.authorId !== HUMAN_ID,
+      referenceIds: references.filter((reference) => reference.fromId === block.id).map((reference) => reference.toId),
     })),
-    references: [],
+    references: references.map((reference) => ({
+      ...reference,
+      summary: titleOf(byId.get(reference.toId) ?? blocks[0]!),
+    })),
   };
 }
 
@@ -58,11 +64,13 @@ export default function App() {
   const [focusedMessageId, setFocusedMessageId] = useState<string>();
   const [liveOnline, setLiveOnline] = useState(false);
   const [liveMessage, setLiveMessage] = useState<WsServerMessage>();
+  const [inboxId, setInboxId] = useState<string>();
 
   const syncServerTree = useCallback(async () => {
-    const next = sortBlocksInDocumentOrder((await api.tree(ROOT_ID)).blocks);
+    const response = await api.tree(ROOT_ID);
+    const next = sortBlocksInDocumentOrder(response.blocks);
     setServerBlocks(next);
-    setSnapshot(toServerSnapshot(next));
+    setSnapshot(toServerSnapshot(next, response.references));
     setServerBacked(true);
     return next;
   }, []);
@@ -80,7 +88,10 @@ export default function App() {
   useEffect(() => {
     void dryvreDataSource.load().then((initial) => {
       setSnapshot(initial);
-      if (import.meta.env.VITE_MOCK_DATA_ONLY !== 'true') return refreshServerTree();
+      if (import.meta.env.VITE_MOCK_DATA_ONLY !== 'true') {
+        void api.inbox().then((inbox) => setInboxId(inbox.blockId)).catch(() => undefined);
+        return refreshServerTree(LAUNCH_ID);
+      }
     });
   }, [refreshServerTree]);
   useEffect(() => {
@@ -132,10 +143,10 @@ export default function App() {
     await dryvreDataSource.setStatus(id, status);
     setSnapshot((current) => current && ({ ...current, blocks: current.blocks.map((block) => block.id === id ? { ...block, status } : block) }));
   };
-  const sendMessage = async (body: string) => {
+  const sendMessage = async (body: string, parentId = selected.id) => {
     if (serverBacked) {
-      await api.apply({ type: 'create', parentId: selected.id, bodyMd: body, stream: true });
-      await refreshServerTree(selected.id, true);
+      await api.apply({ type: 'create', parentId, bodyMd: body, stream: true });
+      await syncServerTree();
       return;
     }
     const message = await dryvreDataSource.createMessage(selected.id, body);
@@ -202,11 +213,11 @@ export default function App() {
 
   return <div className="app-shell">
     <Topbar path={scopePath} view={view} mobileTreeOpen={mobileTreeOpen} onView={setView} onToggleMobileTree={() => setMobileTreeOpen((open) => !open)} />
-    <Sidebar blocks={snapshot.blocks} rootId={snapshot.rootId} selectedId={scope.id} visibleIds={visibleIds} mobileOpen={mobileTreeOpen} onSelect={selectFromTree} onOpenSearch={() => setSearchOpen(true)} onClose={() => setMobileTreeOpen(false)} />
+    <Sidebar blocks={snapshot.blocks} rootId={snapshot.rootId} inboxId={inboxId} selectedId={scope.id} visibleIds={visibleIds} mobileOpen={mobileTreeOpen} onSelect={selectFromTree} onOpenInbox={(id) => { selectFromTree(id); setView('stream'); setMobileTreeOpen(false); }} onOpenSearch={() => setSearchOpen(true)} onClose={() => setMobileTreeOpen(false)} />
     <main><div className="canvas">
       {view === 'document' && <DocumentView scopeId={scope.id} selectedId={selected.id} editingId={editingId} blocks={snapshot.blocks} references={snapshot.references} onSelect={setSelectedId} onEditStart={setEditingId} onEditEnd={(id) => setEditingId((current) => current === id ? null : current)} onEdit={editBlock} onCreateAfter={createBlockAfter} onDelete={deleteBlock} onStatus={(id, status) => void setStatus(id, status)} />}
       {view === 'board' && <BoardView blocks={scopeBlocks} messages={snapshot.messages} selectedId={selected.id} onSelect={setSelectedId} onStatus={(id, status) => void setStatus(id, status)} />}
-      {view === 'stream' && <StreamView selected={selected} messages={selectedMessages} focusedMessageId={focusedMessageId} onSend={(body) => void sendMessage(body)} />}
+      {view === 'stream' && <StreamView selected={selected} messages={selectedMessages} blocks={snapshot.blocks} focusedMessageId={focusedMessageId} onReference={(id) => { setScopeId(id); setSelectedId(id); setView('document'); }} onSend={(body, parentId) => void sendMessage(body, parentId)} />}
     </div></main>
     <ContextRail selected={selected} path={selectedScopePath} blocks={snapshot.blocks} references={snapshot.references} messages={selectedMessages} agents={agents} agentTargets={agentTargets} live={liveOnline} liveMessage={liveMessage} onAgentSent={(targetId, resultBlockId) => { void refreshServerTree(targetId, true).then((next) => { const fallback = next?.filter((block) => block.parentId === targetId && block.rank === null).at(-1)?.id; setFocusedMessageId(resultBlockId ?? fallback); }); }} onOpenStream={() => setView('stream')} />
     <SearchDialog open={searchOpen} blocks={snapshot.blocks} scopePath={scopePath} onClose={closeSearch} onApply={(filters) => void applySearch(filters)} />

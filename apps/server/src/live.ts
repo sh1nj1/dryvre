@@ -4,7 +4,7 @@ import { opEnvelopeSchema } from '@dryvre/shared';
 import type { DryvreDatabase } from '@dryvre/db';
 import { applyOperation } from './block-service.js';
 
-export function registerLive(app: FastifyInstance, db: DryvreDatabase) {
+export function registerLive(app: FastifyInstance, db: DryvreDatabase, onApplied: (result: Awaited<ReturnType<typeof applyOperation>>, actorId: string) => void = () => undefined) {
   const clients = new Map<WebSocket, string>();
   const publish = (message: unknown, recipientId?: string) => {
     const data = JSON.stringify(message);
@@ -26,6 +26,7 @@ export function registerLive(app: FastifyInstance, db: DryvreDatabase) {
         clientOpId = envelope.clientOpId;
         const result = await applyOperation(db, envelope, request.actorId);
         publish({ type: 'applied', clientOpId, ...result });
+        onApplied(result, request.actorId);
       } catch (error) {
         socket.send(JSON.stringify({ type: 'rejected', clientOpId, reason: error instanceof Error ? error.message : 'Invalid operation' }));
       }

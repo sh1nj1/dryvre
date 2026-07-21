@@ -23,13 +23,15 @@ export function Topbar({ path, view, mobileTreeOpen, onView, onToggleMobileTree 
   </header>;
 }
 
-export function Sidebar({ blocks, rootId, selectedId, visibleIds, mobileOpen, onSelect, onOpenSearch, onClose }: {
+export function Sidebar({ blocks, rootId, inboxId, selectedId, visibleIds, mobileOpen, onSelect, onOpenInbox, onOpenSearch, onClose }: {
   blocks: DryvreBlock[];
   rootId: string;
+  inboxId: string | undefined;
   selectedId: string;
   visibleIds: Set<string> | null;
   mobileOpen: boolean;
   onSelect: (id: string) => void;
+  onOpenInbox: (id: string) => void;
   onOpenSearch: () => void;
   onClose: () => void;
 }) {
@@ -45,7 +47,7 @@ export function Sidebar({ blocks, rootId, selectedId, visibleIds, mobileOpen, on
 
   const renderNode = (block: DryvreBlock, depth: number): React.ReactNode => {
     if (visibleIds && !visibleIds.has(block.id)) return null;
-    const nested = children.get(block.id) ?? [];
+    const nested = (children.get(block.id) ?? []).filter((child) => child.id !== inboxId);
     return <div key={block.id}>
       <button className={`tree-row ${selectedId === block.id ? 'active' : ''}`} style={{ paddingLeft: 8 + depth * 20 }} onClick={() => { onSelect(block.id); onClose(); }}>
       <span className="chev">{nested.length ? '⌄' : ''}</span><span className="node-icon">{block.icon ?? '◇'}</span><span className="node-label">{block.title}</span>
@@ -55,10 +57,11 @@ export function Sidebar({ blocks, rootId, selectedId, visibleIds, mobileOpen, on
   };
 
   const root = blocks.find((block) => block.id === rootId);
+  const inbox = inboxId ? blocks.find((block) => block.id === inboxId) : undefined;
   return <>
     <div className={`mobile-backdrop ${mobileOpen ? 'show' : ''}`} onClick={onClose} />
     <aside className={`sidebar ${mobileOpen ? 'mobile-open' : ''}`}>
-      <div className="side-tools"><button className="search-trigger" onClick={onOpenSearch}><span>⌕</span><span>Search &amp; filter</span><kbd>⌘K</kbd></button></div>
+      <div className="side-tools"><button className="search-trigger" onClick={onOpenSearch}><span>⌕</span><span>Search &amp; filter</span><kbd>⌘K</kbd></button>{inbox && <button className={`inbox-trigger ${selectedId === inbox.id ? 'active' : ''}`} onClick={() => onOpenInbox(inbox.id)}><span>◎</span><span>Inbox</span></button>}</div>
       <nav className="tree-wrap" aria-label="Block tree"><div className="section-label"><span>Tree</span></div>{root && renderNode(root, 0)}</nav>
     </aside>
   </>;
@@ -114,7 +117,7 @@ export function DocumentView({ scopeId, selectedId, editingId, blocks, reference
     return <div className={depth ? 'doc-children' : ''} key={block.id}>
       <div className={`doc-block ${selectedId === block.id ? 'selected' : ''}`} tabIndex={0} onClick={() => { onSelect(block.id); onEditStart(block.id); }} onKeyDown={(event) => { if (event.key === 'Enter' && event.target === event.currentTarget) { event.preventDefault(); onEditStart(block.id); } }}>
       <span className="drag-handle">⠿</span>
-      {isTask ? <><div className="task-line"><button className={`check ${block.status === 'done' ? 'done' : ''}`} onClick={(event) => { event.stopPropagation(); onStatus(block.id, block.status === 'done' ? 'todo' : 'done'); }}>{block.status === 'done' ? '✓' : ''}</button><span className={block.status === 'done' ? 'done-copy' : ''}>{block.title}</span><StatusChip status={block.status!} /></div>{editingId === block.id ? editor(block) : block.bodyMd && <div className="doc-copy"><ReactMarkdown>{block.bodyMd}</ReactMarkdown></div>}</> : editingId === block.id ? editor(block) : block.bodyMd ? <div className="doc-copy"><ReactMarkdown>{block.bodyMd}</ReactMarkdown></div> : <h3>{block.title}</h3>}
+      {isTask ? <><div className="task-line"><button className={`check ${block.status === 'done' ? 'done' : ''}`} onClick={(event) => { event.stopPropagation(); onStatus(block.id, block.status === 'done' ? 'todo' : 'done'); }}>{block.status === 'done' ? '✓' : ''}</button><span className={block.status === 'done' ? 'done-copy' : ''}>{block.title}</span><StatusChip status={block.status!} /></div>{editingId === block.id ? editor(block) : block.bodyMd && <div className="doc-copy"><ReactMarkdown>{block.bodyMd}</ReactMarkdown></div>}</> : editingId === block.id ? editor(block) : block.bodyMd ? <div className="doc-copy"><ReactMarkdown>{block.bodyMd}</ReactMarkdown>{/@Developer Agent/i.test(block.bodyMd) && <button className="activate-task" onClick={(event) => { event.stopPropagation(); onStatus(block.id, 'todo'); }}>Move to To do</button>}</div> : <h3>{block.title}</h3>}
       </div>
       {nested.map((child) => renderBlock(child, depth + 1))}
       {showInsert && insertAfter(block)}
@@ -136,14 +139,15 @@ export function BoardView({ blocks, messages, selectedId, onSelect, onStatus }: 
   })}</div>;
 }
 
-export function StreamView({ selected, messages, focusedMessageId, onSend }: { selected: DryvreBlock; messages: BlockMessage[]; focusedMessageId: string | undefined; onSend: (body: string) => void }) {
+export function StreamView({ selected, messages, blocks, focusedMessageId, onReference, onSend }: { selected: DryvreBlock; messages: BlockMessage[]; blocks?: DryvreBlock[]; focusedMessageId: string | undefined; onReference?: (id: string) => void; onSend: (body: string, parentId?: string) => void }) {
   const [value, setValue] = useState('');
+  const [replyToId, setReplyToId] = useState<string>();
   const focusedMessage = useRef<HTMLElement>(null);
   useEffect(() => { focusedMessage.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }); }, [focusedMessageId, messages]);
-  const send = () => { if (!value.trim()) return; onSend(value.trim()); setValue(''); };
+  const send = () => { if (!value.trim()) return; onSend(value.trim(), replyToId); setValue(''); setReplyToId(undefined); };
   return <div className="stream-layout">
-    {messages.length ? messages.map((message) => <article ref={message.id === focusedMessageId ? focusedMessage : undefined} className={`message ${message.agent ? 'agent' : ''} ${message.id === focusedMessageId ? 'result-focus' : ''}`} key={message.id}><div className="avatar">{message.initials}</div><div><div className="message-head"><strong>{message.author}</strong><span>{message.timeLabel}</span></div><div className="message-body"><p>{message.body}</p>{message.createdBlocks && <div className="agent-output">{message.createdBlocks.map((body) => <div className="agent-block" key={body}>{body}</div>)}</div>}</div><div className="message-actions">Reply · Reference · •••</div></div></article>) : <div className="empty-stream"><strong>No messages yet</strong><span>Start a conversation in this block.</span></div>}
-    <div className="composer"><textarea value={value} onChange={(event) => setValue(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) send(); }} placeholder="Write to this block… Use @ to mention people, agents, or blocks" /><div className="composer-actions"><span className="context-chip">◎ {selected.title}</span><button className="tool-pill">@ Reference</button><button className="send-btn" aria-label="Send message" disabled={!value.trim()} onClick={send}>↑</button></div></div>
+    {messages.length ? messages.map((message) => <article ref={message.id === focusedMessageId ? focusedMessage : undefined} className={`message ${message.agent ? 'agent' : ''} ${message.id === focusedMessageId ? 'result-focus' : ''}`} key={message.id}><div className="avatar">{message.initials}</div><div><div className="message-head"><strong>{message.author}</strong><span>{message.timeLabel}</span></div><div className="message-body"><ReactMarkdown>{message.body}</ReactMarkdown>{message.referenceIds?.map((id) => <button className="message-reference" key={id} onClick={() => onReference?.(id)}>↗ {blocks?.find((block) => block.id === id)?.title ?? 'Original task'}</button>)}{message.createdBlocks && <div className="agent-output">{message.createdBlocks.map((body) => <div className="agent-block" key={body}>{body}</div>)}</div>}</div><div className="message-actions"><button onClick={() => setReplyToId(message.id)}>Reply</button><span> · Reference · •••</span></div></div></article>) : <div className="empty-stream"><strong>No messages yet</strong><span>Start a conversation in this block.</span></div>}
+    <div className="composer">{replyToId && <div className="reply-context"><span>Replying to {messages.find((message) => message.id === replyToId)?.body.replace(/^#+\s*/, '').split('\n')[0] ?? 'request'}</span><button aria-label="Cancel reply" onClick={() => setReplyToId(undefined)}>×</button></div>}<textarea value={value} onChange={(event) => setValue(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) send(); }} placeholder="Write to this block… Use @ to mention people, agents, or blocks" /><div className="composer-actions"><span className="context-chip">◎ {selected.title}</span><button className="tool-pill">@ Reference</button><button className="send-btn" aria-label="Send message" disabled={!value.trim()} onClick={send}>↑</button></div></div>
   </div>;
 }
 

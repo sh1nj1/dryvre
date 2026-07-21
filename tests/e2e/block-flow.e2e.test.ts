@@ -3,7 +3,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { PostgreSqlContainer, type StartedPostgreSqlContainer } from '@testcontainers/postgresql';
 import type { FastifyInstance } from 'fastify';
 import { WebSocket } from 'ws';
-import { createDatabase, subjects } from '@dryvre/db';
+import { agentLoops, agentTriggerDeliveries, createDatabase, opLog, subjects } from '@dryvre/db';
 import { migrateDatabase } from '@dryvre/db/migrate';
 import { buildApp } from '../../apps/server/src/app.js';
 import { createSessionToken } from '../../apps/server/src/auth.js';
@@ -118,6 +118,84 @@ describe('Dryvre API with PostgreSQL', () => {
       .filter((block) => block.parentId === ROOT_ID && block.rank === null)
       .map((block) => block.id))
       .toEqual([olderId, newerId]);
+  });
+
+  it('runs the seeded PM to Inbox to Developer loop on canonical blocks', async () => {
+    const launchId = '00000000-0000-4000-8000-000000000120';
+    const inboxId = '00000000-0000-4000-8000-000000000110';
+    const promptId = randomUUID();
+    await expect(post('/api/ops', {
+      clientOpId: randomUUID(),
+      op: {
+        type: 'create',
+        id: promptId,
+        parentId: launchId,
+        bodyMd: '@PM Agent, turn this into an executable launch task',
+        stream: true,
+      },
+    })).resolves.toHaveProperty('status', 200);
+
+    type TreeResponse = {
+      blocks: Array<{ id: string; parentId: string | null; rank: string | null; bodyMd: string; status: string | null; version: number }>;
+      references: Array<{ fromId: string; toId: string }>;
+    };
+    const waitForTree = async (predicate: (tree: TreeResponse) => boolean) => {
+      for (let attempt = 0; attempt < 100; attempt += 1) {
+        const tree = await fetch(`${origin}/api/trees/${ROOT_ID}`, { signal: AbortSignal.timeout(1_000) }).then((result) => result.json()) as TreeResponse;
+        if (predicate(tree)) return tree;
+        await new Promise((resolve) => setTimeout(resolve, 25));
+      }
+      throw new Error('Timed out waiting for the Agent loop');
+    };
+
+    const drafted = await waitForTree((tree) => tree.blocks.some((block) => block.bodyMd.includes('Publish and verify the Dryvre launch demo')));
+    const task = drafted.blocks.find((block) => block.bodyMd.includes('Publish and verify the Dryvre launch demo'))!;
+    expect(task.parentId).toBe(launchId);
+    expect(task.status).toBeNull();
+    expect(task.bodyMd).toContain('@Developer Agent');
+    expect(task.bodyMd).toContain('TBD');
+
+    await expect(post('/api/ops', {
+      clientOpId: randomUUID(),
+      op: { type: 'setStatus', id: task.id, status: 'todo', version: task.version },
+    })).resolves.toHaveProperty('status', 200);
+
+    const blocked = await waitForTree((tree) => tree.blocks.some((block) => block.id === task.id && block.status === 'blocked'));
+    const request = blocked.blocks.find((block) => block.parentId === inboxId && block.bodyMd.includes('Approval required'));
+    expect(request).toBeDefined();
+    expect(blocked.references).toContainEqual({ fromId: request!.id, toId: task.id });
+
+    await expect(post('/api/ops', {
+      clientOpId: randomUUID(),
+      op: {
+        type: 'create',
+        id: randomUUID(),
+        parentId: request!.id,
+        bodyMd: 'Approved. Publish the final demo URL publicly.',
+        stream: true,
+      },
+    })).resolves.toHaveProperty('status', 200);
+
+    const completed = await waitForTree((tree) => tree.blocks.some((block) => block.id === task.id && block.status === 'done'));
+    expect(completed.blocks).toContainEqual(expect.objectContaining({ id: task.id, status: 'done' }));
+    expect(completed.blocks).toContainEqual(expect.objectContaining({ parentId: task.id, bodyMd: expect.stringContaining('Verification evidence') }));
+    expect(completed.blocks).toContainEqual(expect.objectContaining({ parentId: task.id, rank: null, bodyMd: expect.stringContaining('Demo Agent Result') }));
+
+    const evidenceDatabase = createDatabase(container.getConnectionUri());
+    const [operations, loops, deliveries] = await Promise.all([
+      evidenceDatabase.db.select({ payload: opLog.payload }).from(opLog),
+      evidenceDatabase.db.select().from(agentLoops),
+      evidenceDatabase.db.select().from(agentTriggerDeliveries),
+    ]);
+    await evidenceDatabase.close();
+    const statusHistory = operations.flatMap(({ payload }) => {
+      const operation = payload as { type?: string; id?: string; status?: string };
+      return operation.type === 'setStatus' && operation.id === task.id ? [operation.status] : [];
+    });
+    expect(statusHistory).toEqual(['todo', 'blocked', 'todo', 'in_progress', 'done']);
+    expect(loops).toContainEqual(expect.objectContaining({ taskBlockId: task.id, state: 'completed', requestBlockId: request!.id }));
+    expect(deliveries.filter((delivery) => delivery.status === 'completed')).toHaveLength(2);
+    expect(deliveries.some((delivery) => delivery.status === 'failed')).toBe(false);
   });
 
   it('runs two seeded Agents with shared Skills and publishes live completion events', async () => {

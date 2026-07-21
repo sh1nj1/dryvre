@@ -4,6 +4,8 @@ export const subjectKind = pgEnum('subject_kind', ['human', 'agent']);
 export const grantLevel = pgEnum('grant_level', ['read', 'write', 'manage']);
 export const blockStatus = pgEnum('block_status', ['todo', 'in_progress', 'blocked', 'done']);
 export const agentRunStatus = pgEnum('agent_run_status', ['queued', 'running', 'succeeded', 'failed', 'cancelled']);
+export const agentLoopState = pgEnum('agent_loop_state', ['checking', 'waiting_input', 'ready', 'running', 'verifying', 'completed', 'failed']);
+export const agentTriggerDeliveryStatus = pgEnum('agent_trigger_delivery_status', ['processing', 'completed', 'failed']);
 
 export const subjects = pgTable('subject', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -88,6 +90,39 @@ export const agentRuns = pgTable('agent_run', {
   index('agent_run_agent_workspace_created_idx').on(table.agentBlockId, table.workspace, table.createdAt),
   index('agent_run_status_idx').on(table.status),
 ]);
+
+export const subjectInboxes = pgTable('subject_inbox', {
+  subjectId: uuid('subject_id').primaryKey().references(() => subjects.id, { onDelete: 'cascade' }),
+  blockId: uuid('block_id').notNull().references(() => blocks.id, { onDelete: 'restrict' }),
+  createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
+}, (table) => [uniqueIndex('subject_inbox_block_uq').on(table.blockId)]);
+
+export const agentLoops = pgTable('agent_loop', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  taskBlockId: uuid('task_block_id').notNull().references(() => blocks.id, { onDelete: 'cascade' }),
+  triggerVersion: integer('trigger_version').notNull(),
+  requestedBy: uuid('requested_by').notNull().references(() => subjects.id),
+  agentBlockId: uuid('agent_block_id').notNull().references(() => blocks.id, { onDelete: 'cascade' }),
+  state: agentLoopState('state').notNull().default('checking'),
+  requestBlockId: uuid('request_block_id').references(() => blocks.id, { onDelete: 'set null' }),
+  agentRunId: uuid('agent_run_id').references(() => agentRuns.id, { onDelete: 'set null' }),
+  resumeStatus: blockStatus('resume_status'),
+  createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex('agent_loop_task_trigger_uq').on(table.taskBlockId, table.triggerVersion),
+  index('agent_loop_request_idx').on(table.requestBlockId),
+  index('agent_loop_state_idx').on(table.state),
+]);
+
+export const agentTriggerDeliveries = pgTable('agent_trigger_delivery', {
+  triggerBlockId: uuid('trigger_block_id').notNull().references(() => blocks.id, { onDelete: 'cascade' }),
+  opSequence: integer('op_sequence').notNull().references(() => opLog.sequence, { onDelete: 'cascade' }),
+  status: agentTriggerDeliveryStatus('status').notNull().default('processing'),
+  error: text('error'),
+  createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
+}, (table) => [primaryKey({ columns: [table.triggerBlockId, table.opSequence] })]);
 
 export type BlockRow = typeof blocks.$inferSelect;
 export type NewBlockRow = typeof blocks.$inferInsert;

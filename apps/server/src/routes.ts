@@ -1,14 +1,16 @@
 import { randomUUID } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import OpenAI from 'openai';
+import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { blockOpSchema, createAgentRunSchema, opEnvelopeSchema } from '@dryvre/shared';
-import type { DryvreDatabase } from '@dryvre/db';
+import { subjectInboxes, type DryvreDatabase } from '@dryvre/db';
 import type { AppConfig } from './config.js';
-import { applyOperation, getAiContext, getSubtree } from './block-service.js';
+import { applyOperation, getAiContext, getReferences, getSubtree } from './block-service.js';
 import { requireActor } from './auth.js';
 import type { AgentRuntime } from './agent-runtime.js';
 import type { LivePublisher } from './live.js';
+import type { AgentEventRuntime } from './agent-events.js';
 
 const treeParams = z.object({ id: z.string().uuid() });
 const treeQuery = z.object({ q: z.string().optional() });
@@ -16,9 +18,13 @@ const aiBody = z.object({ blockId: z.string().uuid(), prompt: z.string().min(1).
 const blockIdParams = z.object({ blockId: z.string().uuid() });
 const runIdParams = z.object({ id: z.string().uuid() });
 
-export function registerRoutes(app: FastifyInstance, db: DryvreDatabase, config: AppConfig, publish: LivePublisher, agentRuntime: AgentRuntime) {
+export function registerRoutes(app: FastifyInstance, db: DryvreDatabase, config: AppConfig, publish: LivePublisher, agentRuntime: AgentRuntime, agentEvents: AgentEventRuntime) {
   app.get('/api/health', async () => ({ ok: true }));
   app.get('/api/agents/readiness', async () => agentRuntime.readiness());
+  app.get('/api/me/inbox', async (request, reply) => {
+    const inbox = await db.query.subjectInboxes.findFirst({ where: eq(subjectInboxes.subjectId, await requireActor(request)) });
+    return inbox ?? reply.code(404).send({ error: 'Inbox not found' });
+  });
 
   app.post('/api/agents/:blockId/validate', async (request, reply) => {
     try { return await agentRuntime.validate(blockIdParams.parse(request.params).blockId); }
@@ -54,7 +60,7 @@ export function registerRoutes(app: FastifyInstance, db: DryvreDatabase, config:
     const { q } = treeQuery.parse(request.query);
     const result = await getSubtree(db, id, q);
     if (!result) return reply.code(404).send({ error: 'Block not found' });
-    return { blocks: result };
+    return { blocks: result, references: await getReferences(db, result.map((block) => block.id)) };
   });
 
   app.post('/api/ops', async (request) => {
@@ -62,6 +68,7 @@ export function registerRoutes(app: FastifyInstance, db: DryvreDatabase, config:
     const result = await applyOperation(db, envelope, await requireActor(request));
     const message = { type: 'applied', clientOpId: envelope.clientOpId, ...result };
     publish(message);
+    agentEvents.dispatch(result, request.actorId);
     return message;
   });
 
@@ -79,6 +86,7 @@ export function registerRoutes(app: FastifyInstance, db: DryvreDatabase, config:
     const result = await applyOperation(db, envelope, await requireActor(request));
     const message = { type: 'applied', clientOpId: envelope.clientOpId, ...result };
     publish(message);
+    agentEvents.dispatch(result, request.actorId);
     return message;
   });
 }
