@@ -130,6 +130,31 @@ test('renders blocked as a first-class board and search status', async ({ page }
 });
 
 test('runs a ready Local Agent, focuses its result, and can cancel another run', async ({ page }) => {
+  await page.addInitScript(() => {
+    const OriginalWebSocket = window.WebSocket;
+    const counters = window as unknown as { __dryvreActiveLiveSockets: number; __dryvreMaxLiveSockets: number };
+    counters.__dryvreActiveLiveSockets = 0;
+    counters.__dryvreMaxLiveSockets = 0;
+    window.WebSocket = class extends OriginalWebSocket {
+      constructor(url: string | URL, protocols?: string | string[]) {
+        if (protocols === undefined) super(url);
+        else super(url, protocols);
+        if (String(url).includes('/api/live')) {
+          counters.__dryvreActiveLiveSockets += 1;
+          counters.__dryvreMaxLiveSockets = Math.max(counters.__dryvreMaxLiveSockets, counters.__dryvreActiveLiveSockets);
+          let counted = true;
+          const decrement = () => {
+            if (!counted) return;
+            counted = false;
+            counters.__dryvreActiveLiveSockets -= 1;
+          };
+          const close = this.close.bind(this);
+          this.close = (code?: number, reason?: string) => { decrement(); close(code, reason); };
+          this.addEventListener('close', decrement, { once: true });
+        }
+      }
+    };
+  });
   const rootId = '00000000-0000-4000-8000-000000000010';
   const targetId = '00000000-0000-4000-8000-000000000011';
   const productId = '00000000-0000-4000-8000-000000000020';
@@ -177,6 +202,7 @@ test('runs a ready Local Agent, focuses its result, and can cancel another run',
   });
 
   await page.goto('/');
+  await expect.poll(() => page.evaluate(() => (window as unknown as { __dryvreMaxLiveSockets: number }).__dryvreMaxLiveSockets)).toBe(1);
   await expect(page.locator('.agent-readiness')).toContainText('Demo runner · deterministic');
   await expect(page.locator('.agent-toolbar select option')).toHaveCount(3);
   await expect(page.locator('.agent-toolbar')).toContainText('2 skills');

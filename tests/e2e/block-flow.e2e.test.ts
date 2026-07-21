@@ -3,8 +3,10 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { PostgreSqlContainer, type StartedPostgreSqlContainer } from '@testcontainers/postgresql';
 import type { FastifyInstance } from 'fastify';
 import { WebSocket } from 'ws';
+import { createDatabase, subjects } from '@dryvre/db';
 import { migrateDatabase } from '@dryvre/db/migrate';
 import { buildApp } from '../../apps/server/src/app.js';
+import { createSessionToken } from '../../apps/server/src/auth.js';
 import type { AppConfig } from '../../apps/server/src/config.js';
 import { assertDockerReady } from '../../scripts/docker-runtime.js';
 
@@ -12,6 +14,7 @@ const ROOT_ID = '00000000-0000-4000-8000-000000000010';
 let container: StartedPostgreSqlContainer;
 let app: FastifyInstance;
 let origin: string;
+let observerSession: string;
 
 async function post(path: string, body: unknown) {
   return fetch(`${origin}${path}`, {
@@ -41,6 +44,11 @@ beforeAll(async () => {
     DRYVRE_AGENT_TIMEOUT_MS: 1_000,
     DRYVRE_AGENT_FAKE: true,
   };
+  const database = createDatabase(container.getConnectionUri());
+  const observerId = randomUUID();
+  await database.db.insert(subjects).values({ id: observerId, handle: `observer-${observerId}`, displayName: 'Observer' });
+  observerSession = (await createSessionToken(database.db, config, observerId)).token;
+  await database.close();
   app = await buildApp(config);
   origin = await app.listen({ host: '127.0.0.1', port: 0 });
 });
@@ -128,15 +136,24 @@ describe('Dryvre API with PostgreSQL', () => {
     }
 
     const events: Array<{ type: string; runId?: string; resultBlockId?: string }> = [];
+    const observerEvents: Array<{ type: string; runId?: string }> = [];
     const socket = new WebSocket(origin.replace('http', 'ws') + '/api/live');
-    await new Promise<void>((resolve, reject) => {
+    const observer = new WebSocket(origin.replace('http', 'ws') + '/api/live', { headers: { cookie: `dryvre_session=${observerSession}` } });
+    await Promise.all([new Promise<void>((resolve, reject) => {
       socket.on('message', (data) => {
         const event = JSON.parse(data.toString()) as { type: string; runId?: string; resultBlockId?: string };
         events.push(event);
         if (event.type === 'ready') resolve();
       });
       socket.once('error', reject);
-    });
+    }), new Promise<void>((resolve, reject) => {
+      observer.on('message', (data) => {
+        const event = JSON.parse(data.toString()) as { type: string; runId?: string };
+        observerEvents.push(event);
+        if (event.type === 'ready') resolve();
+      });
+      observer.once('error', reject);
+    })]);
 
     const runAgent = async (agentBlockId: string, prompt: string) => {
       const response = await post('/api/agent-runs', { agentBlockId, targetBlockId: ROOT_ID, prompt, resume: true });
@@ -154,11 +171,14 @@ describe('Dryvre API with PostgreSQL', () => {
     const qaRunId = await runAgent(qaId, 'Verify the server-backed Agent flow.');
     await new Promise((resolve) => setTimeout(resolve, 25));
     socket.close();
+    observer.close();
 
     for (const runId of [productRunId, qaRunId]) {
       expect(events).toContainEqual(expect.objectContaining({ type: 'agent_run_status', runId, status: 'running' }));
       expect(events).toContainEqual(expect.objectContaining({ type: 'agent_run_finished', runId, resultBlockId: expect.any(String) }));
     }
+    expect(observerEvents.some((event) => event.type.startsWith('agent_run_'))).toBe(false);
+    expect(observerEvents.some((event) => event.type === 'applied')).toBe(true);
 
     const tree = await fetch(`${origin}/api/trees/${ROOT_ID}`).then((result) => result.json()) as { blocks: Array<{ bodyMd: string; authorId: string }> };
     const productResult = tree.blocks.find((block) => block.bodyMd.includes('Implement the server-backed Agent flow.'));

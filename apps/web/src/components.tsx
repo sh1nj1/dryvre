@@ -4,7 +4,7 @@ import type { AgentRun, Block, WsServerMessage } from '@dryvre/shared';
 import type { BlockMessage, BlockReference, DryvreBlock, SearchFilters, TaskStatus, ViewMode } from './model';
 import { descendantsOf } from './model';
 import { BlockEditor, type EditorSaveResult } from './block-editor';
-import { api, connectLive } from './api';
+import { api } from './api';
 
 const statusLabels: Record<TaskStatus, string> = { todo: 'To do', in_progress: 'In progress', blocked: 'Blocked', done: 'Done' };
 
@@ -147,12 +147,12 @@ export function StreamView({ selected, messages, focusedMessageId, onSend }: { s
   </div>;
 }
 
-export function ContextRail({ selected, path, blocks, references, messages, agents, agentTargets, onAgentSent, onOpenStream }: { selected: DryvreBlock; path: DryvreBlock[]; blocks: DryvreBlock[]; references: BlockReference[]; messages: BlockMessage[]; agents: Block[]; agentTargets: Block[]; onAgentSent: (targetId: string, resultBlockId?: string) => void; onOpenStream: () => void }) {
+export function ContextRail({ selected, path, blocks, references, messages, agents, agentTargets, live, liveMessage, onAgentSent, onOpenStream }: { selected: DryvreBlock; path: DryvreBlock[]; blocks: DryvreBlock[]; references: BlockReference[]; messages: BlockMessage[]; agents: Block[]; agentTargets: Block[]; live: boolean; liveMessage: WsServerMessage | undefined; onAgentSent: (targetId: string, resultBlockId?: string) => void; onOpenStream: () => void }) {
   const relevantRefs = references.filter((reference) => reference.fromId === selected.id);
   const descendants = descendantsOf(selected.id, blocks);
   return <aside className="context-rail"><header className="rail-head"><strong>Block context</strong><span>Auto-built</span></header><div className="rail-scroll"><div className="inspector-label">Selected block</div><div className="selected-card"><span className="path">{path.slice(0, -1).map((block) => block.title).join(' / ') || 'Root'}</span><h3>{selected.title}</h3><p>{selected.bodyMd ?? 'A first-class block in the shared tree.'}</p><div className="selected-meta">Updated {selected.updatedLabel} · {selected.author}</div></div>
     {messages.length > 0 && <button className="messages-card" onClick={onOpenStream}><span className="messages-icon">◉</span><span className="messages-copy"><strong>{messages.length} messages</strong><span>{[...new Set(messages.map((message) => message.author))].join(', ')}</span></span><span className="messages-arrow">→</span></button>}
-    <div className="inspector-label section-gap">Local Agents</div>{agents.length && agentTargets.length ? <AgentComposer agents={agents} targets={agentTargets} onSent={onAgentSent} /> : <p className="empty-copy">Connect the server tree to use local Agents.</p>}
+    <div className="inspector-label section-gap">Local Agents</div>{agents.length && agentTargets.length ? <AgentComposer agents={agents} targets={agentTargets} live={live} liveMessage={liveMessage} onSent={onAgentSent} /> : <p className="empty-copy">Connect the server tree to use local Agents.</p>}
     <div className="inspector-label section-gap">AI reads</div><ul className="context-list">{path.map((block, index) => <li className={`context-item ${block.id === selected.id ? 'current' : ''}`} key={block.id}>{block.title}<small>{block.id === selected.id ? `current block · ${descendants.length} descendants` : index === 0 ? `root · ${descendantsOf(block.id, blocks).length} descendant blocks` : 'parent block'}</small></li>)}</ul>
     <div className="inspector-label section-gap">References</div>{relevantRefs.length ? relevantRefs.map((reference) => { const target = blocks.find((block) => block.id === reference.toId); return target && <div className="reference-card" key={reference.toId}><strong>↗ {target.title}</strong><span>{reference.summary}</span></div>; }) : <p className="empty-copy">No explicit references.</p>}
   </div></aside>;
@@ -202,7 +202,7 @@ function agentError(value: string) {
   return agentErrors[value] ?? value.replaceAll('_', ' ');
 }
 
-export function AgentComposer({ agents, targets, onSent }: { agents: Block[]; targets: Block[]; onSent: (targetId: string, resultBlockId?: string) => void }) {
+export function AgentComposer({ agents, targets, live, liveMessage, onSent }: { agents: Block[]; targets: Block[]; live: boolean; liveMessage: WsServerMessage | undefined; onSent: (targetId: string, resultBlockId?: string) => void }) {
   const [agentId, setAgentId] = useState(agents[0]?.id ?? '');
   const [targetId, setTargetId] = useState(targets[0]?.id ?? '');
   const [value, setValue] = useState('');
@@ -210,7 +210,6 @@ export function AgentComposer({ agents, targets, onSent }: { agents: Block[]; ta
   const [skillNames, setSkillNames] = useState<string[]>([]);
   const [error, setError] = useState<string>();
   const [readiness, setReadiness] = useState<Awaited<ReturnType<typeof api.agentReadiness>>>();
-  const [live, setLive] = useState(false);
   const runRef = useRef<AgentRun | undefined>(undefined);
   const targetRef = useRef(targetId);
   const onSentRef = useRef(onSent);
@@ -229,24 +228,21 @@ export function AgentComposer({ agents, targets, onSent }: { agents: Block[]; ta
     return () => { active = false; };
   }, []);
 
-  useEffect(() => connectLive(
-    () => undefined,
-    setLive,
-    (message: WsServerMessage) => {
-      const current = runRef.current;
-      if (!current || !('runId' in message) || message.runId !== current.id) return;
-      if (message.type === 'agent_run_status') {
-        setRun({ ...current, status: message.status });
-        return;
-      }
-      if (message.type !== 'agent_run_finished' || completedRuns.current.has(current.id)) return;
-      completedRuns.current.add(current.id);
-      void api.agentRun(current.id).then((next) => {
-        setRun(next);
-        onSentRef.current(targetRef.current, message.resultBlockId);
-      }).catch(() => onSentRef.current(targetRef.current, message.resultBlockId));
-    },
-  ), []);
+  useEffect(() => {
+    const message = liveMessage;
+    const current = runRef.current;
+    if (!message || !current || !('runId' in message) || message.runId !== current.id) return;
+    if (message.type === 'agent_run_status') {
+      setRun({ ...current, status: message.status });
+      return;
+    }
+    if (message.type !== 'agent_run_finished' || completedRuns.current.has(current.id)) return;
+    completedRuns.current.add(current.id);
+    void api.agentRun(current.id).then((next) => {
+      setRun(next);
+      onSentRef.current(targetRef.current, message.resultBlockId);
+    }).catch(() => onSentRef.current(targetRef.current, message.resultBlockId));
+  }, [liveMessage]);
 
   useEffect(() => {
     if (!agents.some((agent) => agent.id === agentId)) setAgentId(agents[0]?.id ?? '');
