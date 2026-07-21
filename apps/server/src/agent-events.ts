@@ -53,10 +53,14 @@ export function isAffirmativeApproval(body: string) {
   return affirmative.test(body) && !negative.test(body);
 }
 
-export function contractNeedsInput(context: string) {
+export function contractNeedsInput(context: string, approvalAnswer = '') {
   const required = ['Deliverable:', 'Completion criteria:', 'Constraints:', 'Verification:', '@Developer Agent'];
   const approvalField = context.match(/\*\*Public URL approval:\*\*\s*([^\n]+)/i)?.[1] ?? '';
-  const unresolvedApproval = Boolean(approvalField) && !isAffirmativeApproval(context);
+  // Match approval only against the answer (or a directly-filled field), never the
+  // whole context: negative wording in the contract itself (e.g. "Constraints: Do
+  // not publish before approval") must not cancel out a genuine affirmative reply.
+  const approved = isAffirmativeApproval(approvalAnswer) || isAffirmativeApproval(approvalField);
+  const unresolvedApproval = Boolean(approvalField) && !approved;
   return unresolvedApproval || required.some((field) => !context.includes(field));
 }
 
@@ -161,13 +165,13 @@ export function createAgentEventRuntime(
     emit(result);
   }
 
-  async function taskContext(task: typeof blocks.$inferSelect, ...extra: string[]) {
+  async function taskContext(task: typeof blocks.$inferSelect) {
     const descendants = await db.select().from(blocks).where(like(blocks.path, `${task.path}%`));
     const references = await db.select({ toBlockId: refs.toBlockId }).from(refs).where(eq(refs.fromBlockId, task.id));
     const referencedBlocks = references.length
       ? await db.select().from(blocks).where(inArray(blocks.id, references.map((reference) => reference.toBlockId)))
       : [];
-    return [...descendants, ...referencedBlocks].map((block) => block.bodyMd).concat(extra).join('\n\n');
+    return [...descendants, ...referencedBlocks].map((block) => block.bodyMd).join('\n\n');
   }
 
   async function beginTaskLoop(definition: TriggerDefinition, task: typeof blocks.$inferSelect, requestedBy: string) {
@@ -323,10 +327,10 @@ export function createAgentEventRuntime(
       const task = await db.query.blocks.findFirst({ where: eq(blocks.id, loop.taskBlockId) });
       if (!task || task.status !== 'blocked') continue;
       // A satisfied approval must not resume a task whose contract is still
-      // incomplete: revalidate the ref-aware context (including this reply)
-      // so an under-specified task cannot be claimed and marked done. Leave it
-      // blocked instead; collecting each missing field is out of Lite scope.
-      if (contractNeedsInput(await taskContext(task, `## Approval response\n\n${source.bodyMd}`))) continue;
+      // incomplete: revalidate the ref-aware context and scope the approval to
+      // this reply so an under-specified task cannot be claimed and marked done.
+      // Leave it blocked instead; collecting each missing field is out of Lite scope.
+      if (contractNeedsInput(await taskContext(task), source.bodyMd)) continue;
       const agentAuthorId = await agentRuntime.subjectFor(loop.agentBlockId);
       const emissions = await db.transaction(async (tx) => {
         const approvalEvidence = await applyOperationInTransaction(tx, {
@@ -385,8 +389,11 @@ export function createAgentEventRuntime(
     if (!source) return;
     if (operation.op.type === 'create') await resumeWaitingLoop(source, actorId);
     const actor = await db.query.subjects.findFirst({ where: eq(subjects.id, actorId) });
+    // A status change must match the same ref-aware context the loop later runs on:
+    // a `@Developer Agent` mention living in a referenced block (not a path descendant)
+    // must still trigger, otherwise the loop is skipped before the ref-aware preflight.
     const context = operation.op.type === 'setStatus'
-      ? (await db.select({ bodyMd: blocks.bodyMd }).from(blocks).where(like(blocks.path, `${source.path}%`))).map((row) => row.bodyMd).join('\n\n')
+      ? await taskContext(source)
       : source.bodyMd;
     const triggers = await loadTriggers();
     for (const definition of triggers) {

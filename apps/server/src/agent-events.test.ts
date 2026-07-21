@@ -33,18 +33,26 @@ describe('Agent event safety', () => {
   });
 
   it('keeps blocking when an affirmative approval leaves other contract fields missing', () => {
-    // Approval satisfied, but the required Verification section is absent.
-    const missingVerification = completeContract
-      .replace('Verification: Run the e2e suite\n', '')
-      .concat('\n## Approval response\n\nApproved. Publish it publicly.');
-    expect(isAffirmativeApproval(missingVerification)).toBe(true);
-    expect(contractNeedsInput(missingVerification)).toBe(true);
+    // Approval satisfied via the reply, but the required Verification section is absent.
+    const missingVerification = completeContract.replace('Verification: Run the e2e suite\n', '');
+    expect(contractNeedsInput(missingVerification, 'Approved. Publish it publicly.')).toBe(true);
   });
 
   it('clears input once approval is affirmative and every field is present', () => {
-    const answered = `${completeContract}\n## Approval response\n\nApproved. Publish it publicly.`;
     expect(contractNeedsInput(completeContract)).toBe(true);
-    expect(contractNeedsInput(answered)).toBe(false);
+    expect(contractNeedsInput(completeContract, 'Approved. Publish it publicly.')).toBe(false);
+  });
+
+  it('scopes approval to the reply so negative contract wording cannot cancel it', () => {
+    // The contract itself carries negative wording; only the reply grants approval.
+    const guardedContract = completeContract.replace(
+      'Constraints: Stay in scope',
+      'Constraints: Do not publish before approval',
+    );
+    // Without a reply the approval is still unresolved.
+    expect(contractNeedsInput(guardedContract)).toBe(true);
+    // An affirmative reply clears it even though the contract says "Do not publish".
+    expect(contractNeedsInput(guardedContract, 'Yes, approved. Publish it publicly.')).toBe(false);
   });
 
   it('isolates malformed trigger blocks while keeping valid subscriptions', () => {
