@@ -49,8 +49,8 @@ DATABASE_DUMP_TEXT = re.compile(
 SRT_TIMING = re.compile(
     r"\d{2}:\d{2}:\d{2},\d{3}\s+-->\s+\d{2}:\d{2}:\d{2},\d{3}(?:\s+.*)?"
 )
-BINARY_SUFFIXES = {".png", ".jpg", ".jpeg", ".gif", ".pdf", ".mp4", ".webm", ".zip"}
-VIDEO_SUFFIXES = {".mp4", ".webm"}
+BINARY_SUFFIXES = {".png", ".jpg", ".jpeg", ".gif", ".pdf", ".mp4", ".mov", ".webm", ".zip"}
+VIDEO_SUFFIXES = {".mp4", ".mov", ".webm"}
 TAR_SUFFIXES = (".tar", ".tar.gz", ".tgz", ".tar.bz2", ".tbz2", ".tar.xz", ".txz")
 UNSUPPORTED_ARCHIVE_SUFFIXES = (".gz", ".bz2", ".xz", ".zst", ".7z", ".rar")
 
