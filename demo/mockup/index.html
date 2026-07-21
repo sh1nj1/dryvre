@@ -331,9 +331,6 @@
     .card-footer { display: flex; align-items: center; margin-top: 13px; }
     .mini-avatar { width: 23px; height: 23px; border-radius: 50%; display: grid; place-items: center; background: var(--lime); font-size: 8px; font-weight: 800; }
     .comment-count { margin-left: auto; color: var(--muted); font-size: 10px; }
-    .add-card { width: 100%; height: 34px; border: 1px dashed #c9c6bd; border-radius: 9px; background: transparent; color: var(--muted); cursor: pointer; }
-    .add-card:hover { color: var(--accent); border-color: var(--accent); }
-
     /* Stream */
     .stream-layout { max-width: 760px; margin: 0 auto; }
     .stream-focus { margin-bottom: 20px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 10px; background: rgba(255, 254, 249, .72); display: flex; align-items: center; gap: 11px; }
@@ -553,7 +550,6 @@
               <header class="column-head"><span class="column-dot"></span>To do <span class="column-count">1</span></header>
               <div class="cards">
                 <article class="card" data-select="Board status interactions"><div class="card-meta"><span class="card-path">Core experience</span><span class="card-id">#B-14</span></div><h3>Board status interactions</h3><p>Move a block between states without creating a separate task record.</p><div class="card-footer"><span class="mini-avatar">SO</span><span class="comment-count">◉ 2</span></div></article>
-                <button class="add-card" data-toast="Add a task block to this column">＋ Add block</button>
               </div>
             </section>
             <section class="column">
@@ -561,14 +557,12 @@
               <div class="cards">
                 <article class="card selected" data-select="Three views, one tree"><div class="card-meta"><span class="card-path">Core experience</span><span class="card-id">#B-12</span></div><h3>Three views, one tree</h3><p>Render identical blocks as a document, board, and conversation stream.</p><div class="card-footer"><span class="mini-avatar">SO</span><span class="comment-count">◉ 3</span></div></article>
                 <article class="card" data-select="AI writes back into the tree"><div class="card-meta"><span class="card-path">Core experience</span><span class="card-id">#B-18</span></div><h3>AI writes back into the tree</h3><p>Use subtree and references as automatic, visible context.</p><div class="card-footer"><span class="mini-avatar" style="background:var(--ink);color:white">AI</span><span class="comment-count">◉ 4</span></div></article>
-                <button class="add-card" data-toast="Add a task block to this column">＋ Add block</button>
               </div>
             </section>
             <section class="column">
               <header class="column-head"><span class="column-dot"></span>Blocked <span class="column-count">1</span></header>
               <div class="cards">
                 <article class="card" data-select="Record the three-minute product story"><div class="card-meta"><span class="card-path">Launch checklist</span><span class="card-id">#B-21</span></div><h3>Record the three-minute product story</h3><p>Waiting for final approval on the public demo URL.</p><div class="card-footer"><span class="mini-avatar" style="background:var(--violet-soft);color:var(--violet)">MK</span><span class="comment-count">◉ 1</span></div></article>
-                <button class="add-card" data-toast="Add a task block to this column">＋ Add block</button>
               </div>
             </section>
             <section class="column">
@@ -576,7 +570,6 @@
               <div class="cards">
                 <article class="card" data-select="Document tree renderer"><div class="card-meta"><span class="card-path">Core experience</span><span class="card-id">#B-13</span></div><h3>Document tree renderer</h3><p>Nested blocks render as a calm, readable living document.</p><div class="card-footer"><span class="mini-avatar">SO</span><span class="comment-count">◉ 1</span></div></article>
                 <article class="card" data-select="Seed demo workspace"><div class="card-meta"><span class="card-path">Launch checklist</span><span class="card-id">#B-20</span></div><h3>Seed demo workspace</h3><p>A coherent product story, ready when the app opens.</p><div class="card-footer"><span class="mini-avatar" style="background:var(--violet-soft);color:var(--violet)">MK</span><span class="comment-count">◉ 0</span></div></article>
-                <button class="add-card" data-toast="Add a task block to this column">＋ Add block</button>
               </div>
             </section>
           </div>
