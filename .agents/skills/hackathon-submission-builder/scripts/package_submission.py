@@ -6,10 +6,16 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import re
 import shutil
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
+
+FORBIDDEN_SOURCE_PATH = re.compile(
+    r"(^|/)(node_modules(/|$)|\.env($|\.)|id_rsa|id_ed25519|.*\.(pem|key|p12)|cookies?\.json$)",
+    re.I,
+)
 
 
 def fail(message: str) -> None:
@@ -39,6 +45,16 @@ def sha256(path: Path) -> str:
         for chunk in iter(lambda: stream.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def reject_forbidden_sources(source: Path, project_root: Path) -> None:
+    candidates = [source]
+    if source.is_dir():
+        candidates.extend(source.rglob("*"))
+    for candidate in candidates:
+        relative = candidate.relative_to(project_root).as_posix()
+        if FORBIDDEN_SOURCE_PATH.search(relative):
+            fail(f"forbidden source path: {relative}")
 
 
 def copy_file(source: Path, destination: Path, output_root: Path) -> dict:
@@ -116,6 +132,7 @@ def main() -> int:
         if not source.exists():
             missing.append({"id": artifact_id, "source": source_value, "required": required})
             continue
+        reject_forbidden_sources(source, project_root)
         if source.is_dir() and inside(output_root, source):
             fail(f"output directory cannot be nested inside a packaged source directory: {source_value}")
         destination = safe_destination(output_root, destination_value)
