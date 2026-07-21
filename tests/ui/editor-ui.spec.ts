@@ -243,7 +243,7 @@ test('recovers to Message mode when navigating from an agent to a non-target blo
     return route.fulfill({ status: 404, json: { error: 'Not found' } });
   });
 
-  await page.goto('/');
+  await page.goto('/app');
   await page.locator('.tree-row').filter({ hasText: 'Demo target' }).click();
   await page.getByRole('tab', { name: /Stream/ }).click();
   await page.getByLabel('Send as').selectOption(productId);
@@ -290,7 +290,7 @@ test('keeps observing an agent run after leaving the Stream view', async ({ page
     return route.fulfill({ status: 404, json: { error: 'Not found' } });
   });
 
-  await page.goto('/');
+  await page.goto('/app');
   await page.locator('.tree-row').filter({ hasText: 'Demo target' }).click();
   await page.getByRole('tab', { name: /Stream/ }).click();
   await page.getByLabel('Send as').selectOption(productId);
@@ -332,7 +332,7 @@ test('keeps message send and cancel available for an in-flight run off its targe
     return route.fulfill({ status: 404, json: { error: 'Not found' } });
   });
 
-  await page.goto('/');
+  await page.goto('/app');
   await page.locator('.tree-row').filter({ hasText: 'Demo target' }).click();
   await page.getByRole('tab', { name: /Stream/ }).click();
   await page.getByLabel('Send as').selectOption(productId);
@@ -384,7 +384,7 @@ test('keeps the mode picker selectable during an in-flight run on a valid target
     return route.fulfill({ status: 404, json: { error: 'Not found' } });
   });
 
-  await page.goto('/');
+  await page.goto('/app');
   await page.locator('.tree-row').filter({ hasText: 'Demo target' }).click();
   await page.getByRole('tab', { name: /Stream/ }).click();
   await page.getByLabel('Send as').selectOption(productId);
