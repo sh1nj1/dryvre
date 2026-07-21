@@ -59,6 +59,19 @@ export interface DryvreDataSource {
   deleteBlock(blockId: string): Promise<void>;
 }
 
+export function blockTitle(block: Pick<DryvreBlock, 'title' | 'bodyMd'>) {
+  const firstLine = block.bodyMd?.trimStart().split('\n', 1)[0] ?? '';
+  const heading = firstLine.match(/^#{1,6}\s+(.+?)\s*#*$/);
+  return heading?.[1]?.trim() || block.title;
+}
+
+export function blockSummary(block: Pick<DryvreBlock, 'bodyMd'>) {
+  const bodyMd = block.bodyMd ?? '';
+  return /^#{1,6}\s+.*(?:\n|$)/.test(bodyMd.trimStart())
+    ? bodyMd.trimStart().replace(/^#{1,6}\s+.*(?:\n|$)/, '').trimStart()
+    : bodyMd;
+}
+
 export function blockPath(blockId: string, blocks: DryvreBlock[]) {
   const byId = new Map(blocks.map((block) => [block.id, block]));
   const path: DryvreBlock[] = [];
