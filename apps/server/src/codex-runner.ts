@@ -184,7 +184,10 @@ export function executeProcess(input: {
       reject(error);
     };
     child.once("error", fail);
-    child.stdin.once("error", fail);
+    child.stdin.once("error", (error: NodeJS.ErrnoException) => {
+      if (error.code === "EPIPE") return;
+      fail(error);
+    });
     const timeout = setTimeout(() => {
       timedOut = true;
       stopCodexProcess(child);
