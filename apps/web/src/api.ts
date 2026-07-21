@@ -1,4 +1,4 @@
-import type { AgentRun, Block, BlockOp, CreateAgentRun, OpEnvelope } from '@dryvre/shared';
+import { wsServerMessageSchema, type AgentRun, type Block, type BlockOp, type CreateAgentRun, type OpEnvelope, type WsServerMessage } from '@dryvre/shared';
 
 const apiBase = import.meta.env.VITE_API_URL ?? '';
 
@@ -16,17 +16,21 @@ export const api = {
   startAgentRun: (input: CreateAgentRun) => request<AgentRun>('/api/agent-runs', { method: 'POST', body: JSON.stringify(input) }),
   agentRun: (id: string) => request<AgentRun>(`/api/agent-runs/${id}`),
   cancelAgentRun: (id: string) => request<AgentRun>(`/api/agent-runs/${id}/cancel`, { method: 'POST' }),
+  agentReadiness: () => request<{ ready: boolean; mode: 'fake' | 'codex'; version?: string; error?: string; mcp?: 'ready' }>('/api/agents/readiness'),
 };
 
-export function connectLive(onChange: () => void, onStatus: (online: boolean) => void) {
+export function connectLive(onChange: () => void, onStatus: (online: boolean) => void, onMessage: (message: WsServerMessage) => void = () => undefined) {
   const liveUrl = new URL(`${apiBase.replace(/\/$/, '')}/api/live`, location.origin);
   liveUrl.protocol = liveUrl.protocol === 'https:' ? 'wss:' : 'ws:';
   const socket = new WebSocket(liveUrl);
   socket.onopen = () => onStatus(true);
   socket.onclose = () => onStatus(false);
   socket.onmessage = (event) => {
-    const message = JSON.parse(event.data as string) as { type?: string };
+    const parsed = wsServerMessageSchema.safeParse(JSON.parse(event.data as string));
+    if (!parsed.success) return;
+    const message = parsed.data;
     if (message.type === 'applied') onChange();
+    onMessage(message);
   };
   return () => socket.close();
 }

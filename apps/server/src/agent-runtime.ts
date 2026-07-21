@@ -6,6 +6,7 @@ import {
   agentRuns,
   blocks,
   refs,
+  sessions,
   subjects,
   type DryvreDatabase,
 } from "@dryvre/db";
@@ -19,6 +20,7 @@ import {
   type CreateAgentRun,
 } from "@dryvre/shared";
 import type { AppConfig } from "./config.js";
+import { createSessionToken } from "./auth.js";
 import {
   applyOperation,
   applyOperationInTransaction,
@@ -195,6 +197,7 @@ export async function createAgentRuntime(
     requestedBy: string,
   ) {
     let agentSubjectId: string | null = null;
+    let managedSessionId: string | null = null;
     try {
       if (cancelled.has(runId)) return;
       const { definition, skills } = await readDefinition(input.agentBlockId);
@@ -206,6 +209,15 @@ export async function createAgentRuntime(
         config,
         definition.config.workspace,
       );
+      const managedSession = config.DRYVRE_AGENT_FAKE
+        ? null
+        : await createSessionToken(
+            db,
+            config,
+            agentSubjectId,
+            config.DRYVRE_AGENT_TIMEOUT_MS + 60_000,
+          );
+      managedSessionId = managedSession?.id ?? null;
       const context = await getAiContext(db, input.targetBlockId);
       const previous = input.resume
         ? await db.query.agentRuns.findFirst({
@@ -227,6 +239,8 @@ export async function createAgentRuntime(
         skillNames,
         "# Focused Dryvre context",
         context,
+        "# Live Dryvre tools",
+        `The dryvre MCP server can read or update canonical blocks during this run. The target block ID is ${input.targetBlockId}. Use dryvre_read_tree before changing existing blocks, and keep all writes inside the requested scope.`,
         "# User request",
         input.prompt,
         "# Output contract",
@@ -249,6 +263,7 @@ export async function createAgentRuntime(
         prompt,
         workspace,
         resumeSessionId: previous?.codexSessionId ?? null,
+        dryvreSession: managedSession?.token ?? null,
         onSpawn: (child) => {
           if (cancelled.has(runId)) {
             stopCodexProcess(child);
@@ -346,6 +361,8 @@ export async function createAgentRuntime(
         errorCode(error),
       );
     } finally {
+      if (managedSessionId)
+        await db.delete(sessions).where(eq(sessions.id, managedSessionId)).catch(() => undefined);
       activeAgents.delete(input.agentBlockId);
     }
   }

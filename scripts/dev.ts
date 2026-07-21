@@ -48,6 +48,15 @@ async function resolveDatabase() {
   return { databaseUrl: container.getConnectionUri(), container };
 }
 
+async function buildManagedMcp() {
+  const child = spawn('npm', ['run', 'build', '-w', '@dryvre/mcp'], {
+    env: process.env,
+    stdio: 'inherit',
+  });
+  const code = await new Promise<number | null>((resolve) => child.once('exit', resolve));
+  if (code !== 0) throw new Error('Could not build the Dryvre MCP entrypoint');
+}
+
 let container: StartedPostgreSqlContainer | undefined;
 try {
   const resolved = await resolveDatabase();
@@ -62,6 +71,8 @@ try {
     throw error;
   }
   console.log(`[dev] Database migrations applied (${container ? 'Testcontainers' : 'local'} mode).`);
+  await buildManagedMcp();
+  console.log('[dev] Dryvre MCP entrypoint built for Local Agents.');
 
   const child = spawn('npm', ['run', 'dev:apps'], {
     env: { ...process.env, DATABASE_URL: resolved.databaseUrl },

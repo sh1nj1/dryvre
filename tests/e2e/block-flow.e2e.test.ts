@@ -93,22 +93,59 @@ describe('Dryvre API with PostgreSQL', () => {
     expect(tree.blocks).toContainEqual(expect.objectContaining({ id: blockId, bodyMd: 'Edited through the full HTTP stack', version: 1 }));
   });
 
-  it('runs a seeded Agent against a server-backed target block', async () => {
-    const response = await post('/api/agent-runs', {
-      agentBlockId: '00000000-0000-4000-8000-000000000020',
-      targetBlockId: ROOT_ID,
-      prompt: 'Verify the server-backed Agent flow.',
-      resume: true,
-    });
-    expect(response.status).toBe(202);
-    let run = await response.json() as { id: string; status: string };
-    for (let attempt = 0; attempt < 20 && ['queued', 'running'].includes(run.status); attempt += 1) {
-      await new Promise((resolve) => setTimeout(resolve, 25));
-      run = await fetch(`${origin}/api/agent-runs/${run.id}`).then((result) => result.json()) as typeof run;
-    }
-    expect(run.status).toBe('succeeded');
+  it('runs two seeded Agents with shared Skills and publishes live completion events', async () => {
+    await expect(fetch(`${origin}/api/agents/readiness`).then((result) => result.json())).resolves.toEqual({ ready: true, mode: 'fake', version: 'fake' });
 
-    const tree = await fetch(`${origin}/api/trees/${ROOT_ID}`).then((result) => result.json()) as { blocks: Array<{ bodyMd: string }> };
-    expect(tree.blocks).toContainEqual(expect.objectContaining({ bodyMd: expect.stringContaining('Verify the server-backed Agent flow.') }));
+    const productId = '00000000-0000-4000-8000-000000000020';
+    const qaId = '00000000-0000-4000-8000-000000000030';
+    const researcherId = '00000000-0000-4000-8000-000000000050';
+    for (const [agentId, expectedSkills] of [
+      [productId, ['release-check', 'verify-dryvre']],
+      [qaId, ['release-check', 'verify-dryvre']],
+      [researcherId, ['research-context', 'verify-dryvre']],
+    ] as const) {
+      const validation = await post(`/api/agents/${agentId}/validate`, {}).then((result) => result.json()) as { skills: Array<{ slug: string }> };
+      expect(validation.skills.map((skill) => skill.slug).sort()).toEqual([...expectedSkills].sort());
+    }
+
+    const events: Array<{ type: string; runId?: string; resultBlockId?: string }> = [];
+    const socket = new WebSocket(origin.replace('http', 'ws') + '/api/live');
+    await new Promise<void>((resolve, reject) => {
+      socket.on('message', (data) => {
+        const event = JSON.parse(data.toString()) as { type: string; runId?: string; resultBlockId?: string };
+        events.push(event);
+        if (event.type === 'ready') resolve();
+      });
+      socket.once('error', reject);
+    });
+
+    const runAgent = async (agentBlockId: string, prompt: string) => {
+      const response = await post('/api/agent-runs', { agentBlockId, targetBlockId: ROOT_ID, prompt, resume: true });
+      expect(response.status).toBe(202);
+      let run = await response.json() as { id: string; status: string };
+      for (let attempt = 0; attempt < 20 && ['queued', 'running'].includes(run.status); attempt += 1) {
+        await new Promise((resolve) => setTimeout(resolve, 25));
+        run = await fetch(`${origin}/api/agent-runs/${run.id}`).then((result) => result.json()) as typeof run;
+      }
+      expect(run.status).toBe('succeeded');
+      return run.id;
+    };
+
+    const productRunId = await runAgent(productId, 'Implement the server-backed Agent flow.');
+    const qaRunId = await runAgent(qaId, 'Verify the server-backed Agent flow.');
+    await new Promise((resolve) => setTimeout(resolve, 25));
+    socket.close();
+
+    for (const runId of [productRunId, qaRunId]) {
+      expect(events).toContainEqual(expect.objectContaining({ type: 'agent_run_status', runId, status: 'running' }));
+      expect(events).toContainEqual(expect.objectContaining({ type: 'agent_run_finished', runId, resultBlockId: expect.any(String) }));
+    }
+
+    const tree = await fetch(`${origin}/api/trees/${ROOT_ID}`).then((result) => result.json()) as { blocks: Array<{ bodyMd: string; authorId: string }> };
+    const productResult = tree.blocks.find((block) => block.bodyMd.includes('Implement the server-backed Agent flow.'));
+    const qaResult = tree.blocks.find((block) => block.bodyMd.includes('Verify the server-backed Agent flow.'));
+    expect(productResult?.authorId).toBeTruthy();
+    expect(qaResult?.authorId).toBeTruthy();
+    expect(productResult?.authorId).not.toBe(qaResult?.authorId);
   });
 });

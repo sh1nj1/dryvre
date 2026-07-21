@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
+import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import type { AppConfig } from "./config.js";
-import { checkCodexReadiness, executeProcess, killCodexProcessGroup, runCodex } from "./codex-runner.js";
+import { buildManagedCodexProfile, checkCodexReadiness, executeProcess, killCodexProcessGroup, runCodex } from "./codex-runner.js";
 
 const config: AppConfig = {
   NODE_ENV: "test",
@@ -41,6 +44,60 @@ describe("Codex runner", () => {
       mode: "fake",
       version: "fake",
     });
+  });
+
+  it("builds a required managed Dryvre MCP profile without embedding a session", () => {
+    const profile = buildManagedCodexProfile("/tmp/dryvre mcp/index.js");
+    expect(profile).toContain("[mcp_servers.dryvre]");
+    expect(profile).toContain("required = true");
+    expect(profile).toContain('args = ["/tmp/dryvre mcp/index.js"]');
+    expect(profile).toContain('env_vars = ["DRYVRE_URL", "DRYVRE_SESSION"]');
+    expect(profile).not.toContain("dryvre_session=");
+  });
+
+  it.skipIf(process.platform === "win32")("launches real mode with the managed profile and run-scoped MCP environment", async () => {
+    const temporary = await fs.mkdtemp(path.join(os.tmpdir(), "dryvre-codex-runner-"));
+    try {
+      const command = path.join(temporary, "fake-codex");
+      const mcpEntry = path.join(temporary, "dryvre-mcp.js");
+      await fs.writeFile(mcpEntry, "// fixture entry\n");
+      await fs.writeFile(command, [
+        "#!/bin/sh",
+        'test "$1" = "--profile" || exit 11',
+        'test "$2" = "dryvre-managed" || exit 12',
+        'test -f "$CODEX_HOME/dryvre-managed.config.toml" || exit 13',
+        'test "$DRYVRE_URL" = "http://127.0.0.1:4321" || exit 14',
+        'test "$DRYVRE_SESSION" = "run-session" || exit 15',
+        `printf '%s\\n' '${JSON.stringify({ type: "thread.started", thread_id: "managed-thread" })}'`,
+        `printf '%s\\n' '${JSON.stringify({ type: "item.completed", item: { type: "agent_message", text: "Managed MCP ready" } })}'`,
+      ].join("\n"), { mode: 0o700 });
+      const result = await runCodex({
+        config: {
+          ...config,
+          DRYVRE_AGENT_FAKE: false,
+          CODEX_COMMAND: command,
+          DRYVRE_AGENT_DATA_DIR: path.join(temporary, "runtime"),
+          DRYVRE_AGENT_MCP_ENTRY: mcpEntry,
+          DRYVRE_AGENT_MCP_URL: "http://127.0.0.1:4321",
+        },
+        runId: crypto.randomUUID(),
+        agentBlockId: crypto.randomUUID(),
+        agentConfig: { workspace: "dryvre" },
+        skills: [],
+        prompt: "Use Dryvre tools.",
+        workspace: process.cwd(),
+        resumeSessionId: null,
+        dryvreSession: "run-session",
+        onSpawn: () => undefined,
+      });
+      expect(result).toEqual(expect.objectContaining({
+        exitCode: 0,
+        sessionId: "managed-thread",
+        summary: "Managed MCP ready",
+      }));
+    } finally {
+      await fs.rm(temporary, { recursive: true, force: true });
+    }
   });
 
   it("kills a persisted detached process group during reconciliation", () => {

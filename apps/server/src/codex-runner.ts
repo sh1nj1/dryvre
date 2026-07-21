@@ -13,6 +13,7 @@ import type { AppConfig } from "./config.js";
 
 const MAX_CAPTURE_BYTES = 1024 * 1024;
 const STATIC_CODEX_FILES = ["config.json", "config.toml", "instructions.md"];
+const MANAGED_PROFILE = "dryvre-managed";
 const execFileAsync = promisify(execFile);
 
 function appendWithCap(current: string, chunk: string) {
@@ -72,6 +73,36 @@ async function materializeSkills(codexHome: string, skills: CompiledSkill[]) {
   }
   await fs.rm(root, { recursive: true, force: true });
   await fs.rename(temporary, root);
+}
+
+export function buildManagedCodexProfile(mcpEntry: string) {
+  return [
+    "[mcp_servers.dryvre]",
+    "enabled = true",
+    "required = true",
+    `command = ${JSON.stringify(process.execPath)}`,
+    `args = [${JSON.stringify(mcpEntry)}]`,
+    'env_vars = ["DRYVRE_URL", "DRYVRE_SESSION"]',
+    'enabled_tools = ["dryvre_read_tree", "dryvre_create_block", "dryvre_edit_block"]',
+    "startup_timeout_sec = 10.0",
+    "tool_timeout_sec = 60.0",
+    "",
+  ].join("\n");
+}
+
+async function resolveMcpEntry(config: AppConfig) {
+  const configured = config.DRYVRE_AGENT_MCP_ENTRY ?? "dist/mcp/index.js";
+  return fs.realpath(path.resolve(configured)).catch(() => {
+    throw new Error("dryvre_mcp_not_built");
+  });
+}
+
+async function materializeManagedProfile(codexHome: string, mcpEntry: string) {
+  await fs.writeFile(
+    path.join(codexHome, `${MANAGED_PROFILE}.config.toml`),
+    buildManagedCodexProfile(mcpEntry),
+    { mode: 0o600 },
+  );
 }
 
 function parseWorkspaceMap(config: AppConfig) {
@@ -178,6 +209,7 @@ export async function runCodex(input: {
   prompt: string;
   workspace: string;
   resumeSessionId: string | null;
+  dryvreSession?: string | null;
   onSpawn: (child: ChildProcessWithoutNullStreams) => void;
 }): Promise<CodexRunResult> {
   if (input.config.DRYVRE_AGENT_FAKE) {
@@ -212,9 +244,13 @@ export async function runCodex(input: {
     input.agentBlockId,
     "codex-home",
   );
+  const mcpEntry = await resolveMcpEntry(input.config);
   await seedCodexHome(codexHome);
   await materializeSkills(codexHome, input.skills);
+  await materializeManagedProfile(codexHome, mcpEntry);
   const baseArgs = [
+    "--profile",
+    MANAGED_PROFILE,
     "exec",
     "--json",
     "--sandbox",
@@ -236,7 +272,17 @@ export async function runCodex(input: {
     command: input.config.CODEX_COMMAND,
     args,
     cwd: input.workspace,
-    env: { ...process.env, CODEX_HOME: codexHome, NO_COLOR: "1" },
+    env: {
+      ...process.env,
+      CODEX_HOME: codexHome,
+      NO_COLOR: "1",
+      DRYVRE_URL:
+        input.config.DRYVRE_AGENT_MCP_URL ??
+        `http://127.0.0.1:${input.config.PORT}`,
+      ...(input.dryvreSession
+        ? { DRYVRE_SESSION: input.dryvreSession }
+        : {}),
+    },
     prompt: input.prompt,
     timeoutMs: input.config.DRYVRE_AGENT_TIMEOUT_MS,
     onSpawn: input.onSpawn,
@@ -249,7 +295,17 @@ export async function runCodex(input: {
       command: input.config.CODEX_COMMAND,
       args: [...baseArgs, "-"],
       cwd: input.workspace,
-      env: { ...process.env, CODEX_HOME: codexHome, NO_COLOR: "1" },
+      env: {
+        ...process.env,
+        CODEX_HOME: codexHome,
+        NO_COLOR: "1",
+        DRYVRE_URL:
+          input.config.DRYVRE_AGENT_MCP_URL ??
+          `http://127.0.0.1:${input.config.PORT}`,
+        ...(input.dryvreSession
+          ? { DRYVRE_SESSION: input.dryvreSession }
+          : {}),
+      },
       prompt: input.prompt,
       timeoutMs: input.config.DRYVRE_AGENT_TIMEOUT_MS,
       onSpawn: input.onSpawn,
@@ -307,7 +363,30 @@ export async function checkCodexReadiness(config: AppConfig) {
       ["--version"],
       { timeout: 5_000 },
     );
-    return { ready: true, mode: "codex" as const, version: stdout.trim() };
+    const version = stdout.trim();
+    try {
+      await execFileAsync(config.CODEX_COMMAND, ["login", "status"], {
+        timeout: 5_000,
+      });
+    } catch {
+      return {
+        ready: false,
+        mode: "codex" as const,
+        version,
+        error: "auth_required",
+      };
+    }
+    try {
+      await resolveMcpEntry(config);
+    } catch {
+      return {
+        ready: false,
+        mode: "codex" as const,
+        version,
+        error: "dryvre_mcp_not_built",
+      };
+    }
+    return { ready: true, mode: "codex" as const, version, mcp: "ready" as const };
   } catch {
     return { ready: false, mode: "codex" as const, error: "codex_not_found" };
   }

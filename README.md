@@ -43,15 +43,18 @@ Configure `OPENAI_API_KEY` to enable the AI composer. `OPENAI_MODEL` defaults to
 
 ## Local Codex Agents
 
-The context panel can run Agent blocks through a locally installed Codex CLI. Run `codex login`, then configure named workspace roots in `.env`:
+The context panel can run Agent blocks through a locally installed Codex CLI. Run `codex login`, verify it with `codex login status`, then configure named workspace roots in `.env`:
 
 ```dotenv
 CODEX_COMMAND=codex
 DRYVRE_AGENT_WORKSPACES={"dryvre":"/absolute/path/to/dryvre"}
 DRYVRE_AGENT_TIMEOUT_MS=900000
+DRYVRE_AGENT_MCP_URL=http://127.0.0.1:50000
 ```
 
 Agent definitions begin with `# @agent <slug>` and have one direct `agent-config` code-block child. Skills begin with `# @skill <slug>`; prose becomes `SKILL.md`, while `file:scripts/example.sh` code blocks become runtime files. Put Skills below an Agent or reference a shared Skill subtree from it. The initial migration seeds Product Engineer and QA Agents that share one verification Skill.
+
+`npm run dev` builds the Dryvre MCP entrypoint before starting the apps. When starting the server separately, run `npm run build -w @dryvre/mcp` first. The Agent readiness card (or `GET /api/agents/readiness`) reports missing Codex login and MCP builds. Real runs receive a managed Codex profile with the Dryvre MCP tools, so they can read, create, and edit canonical blocks while retaining the Agent author identity.
 
 For a deterministic demo without Codex credentials, set `DRYVRE_AGENT_FAKE=true`; Docker Compose uses this mode by default because the image does not contain the host Codex login. The real runner always uses `workspace-write`, accepts prompts over stdin, and does not expose arbitrary CLI arguments or environment variables through the browser.
 
