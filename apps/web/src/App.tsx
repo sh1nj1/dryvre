@@ -1,48 +1,70 @@
-import { useMemo, useState } from 'react';
-import type { Block, BlockStatus } from '@dryvre/shared';
-import { BlockEditor, Composer, StatusPill } from './components';
-import { ROOT_ID, useTree } from './use-tree';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { dryvreDataSource } from './data-source';
+import { BoardView, ContextRail, DocumentView, SearchDialog, Sidebar, StreamView, Topbar, ViewHeader } from './components';
+import type { DryvreSnapshot, SearchFilters, TaskStatus, ViewMode } from './model';
+import { blockPath, descendantsOf } from './model';
 import './styles.css';
 
-type View = 'document' | 'board' | 'stream';
-const columns: { status: BlockStatus; label: string }[] = [
-  { status: 'todo', label: 'To do' }, { status: 'in_progress', label: 'In progress' }, { status: 'blocked', label: 'Blocked' }, { status: 'done', label: 'Done' },
-];
-
-function titleOf(block: Block) { return block.bodyMd.replace(/^#+\s*/, '').split('\n')[0] || 'Untitled'; }
-
 export default function App() {
-  const [view, setView] = useState<View>('document');
-  const [query, setQuery] = useState('');
-  const [selected, setSelected] = useState(ROOT_ID);
-  const { blocks, byId, loading, error, online, refresh } = useTree(ROOT_ID, query);
-  const root = byId.get(ROOT_ID) ?? blocks[0];
-  const canonical = useMemo(() => blocks.filter((block) => block.rank !== null && block.id !== ROOT_ID), [blocks]);
-  const stream = useMemo(() => [...blocks].filter((block) => block.rank === null).sort((a, b) => a.createdAt.localeCompare(b.createdAt)), [blocks]);
-  const tasks = useMemo(() => blocks.filter((block) => block.status !== null), [blocks]);
+  const [snapshot, setSnapshot] = useState<DryvreSnapshot>();
+  const [view, setView] = useState<ViewMode>('document');
+  const [scopeId, setScopeId] = useState('launch');
+  const [selectedId, setSelectedId] = useState('three-views');
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [mobileTreeOpen, setMobileTreeOpen] = useState(false);
+  const [searchMatches, setSearchMatches] = useState<Set<string> | null>(null);
 
-  return <div className="shell">
-    <header><a className="brand" href="/"><span>D</span>dryvre</a><div className="breadcrumb">Workspace <b>/</b> {root ? titleOf(root) : 'Tree'}</div><div className={`presence ${online ? 'online' : ''}`}><i />{online ? 'Live' : 'Offline'}</div></header>
-    <aside>
-      <div className="workspace"><span>DV</span><div><b>Build Week</b><small>One shared tree</small></div></div>
-      <label className="search"><span>⌕</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Filter this tree" /></label>
-      <div className="section-label">TREE <button>+</button></div>
-      <nav>{blocks.filter((block) => block.rank !== null).map((block) => {
-        const depth = Math.max(0, block.path.split('/').filter(Boolean).length - 1);
-        return <button key={block.id} className={selected === block.id ? 'active' : ''} style={{ paddingLeft: 12 + depth * 16 }} onClick={() => setSelected(block.id)}><span>{block.status ? '□' : '◇'}</span>{titleOf(block)}</button>;
-      })}</nav>
-      <footer><span>3 concepts</span><b>Block · Tree · Reference</b></footer>
-    </aside>
-    <main>
-      <div className="main-head"><div><small>SHARED BLOCK TREE</small><h1>{root ? titleOf(root) : 'Dryvre'}</h1><p>One source of truth, rendered for the work at hand.</p></div><div className="switcher">{(['document', 'board', 'stream'] as View[]).map((item) => <button className={view === item ? 'active' : ''} onClick={() => setView(item)} key={item}>{item === 'document' ? 'Document' : item === 'board' ? 'Board' : 'Stream'}</button>)}</div></div>
-      <section className="canvas">
-        {loading && <div className="notice">Loading tree…</div>}
-        {error && <div className="notice error">{error}<small>Start Postgres, run migrations, then start the server.</small></div>}
-        {!loading && !error && view === 'document' && <div className="document">{canonical.map((block) => <div className="doc-row" key={block.id}><span className="drag">⋮⋮</span><div><BlockEditor block={block} onSaved={refresh} />{block.status && <StatusPill block={block} onSaved={refresh} />}</div></div>)}<Composer parentId={selected} onSent={refresh} /></div>}
-        {!loading && !error && view === 'board' && <div className="board">{columns.map((column) => <div className="column" key={column.status}><h2><i className={`dot ${column.status}`} />{column.label}<span>{tasks.filter((task) => task.status === column.status).length}</span></h2>{tasks.filter((task) => task.status === column.status).map((task) => <article className="card" key={task.id}><BlockEditor block={task} onSaved={refresh} /><StatusPill block={task} onSaved={refresh} /></article>)}</div>)}</div>}
-        {!loading && !error && view === 'stream' && <div className="stream">{stream.map((message) => <article key={message.id}><div className="avatar">{message.authorId.slice(-2).toUpperCase()}</div><div><header><b>{message.authorId === '00000000-0000-4000-8000-000000000001' ? 'You' : 'Collaborator'}</b><time>{new Date(message.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</time></header><BlockEditor block={message} onSaved={refresh} /></div></article>)}<Composer parentId={selected} onSent={refresh} /></div>}
-      </section>
-    </main>
-    <section className="context"><div className="context-head"><small>FOCUS</small><h2>{titleOf(byId.get(selected) ?? root ?? ({ bodyMd: 'Block' } as Block))}</h2></div><div className="context-body"><h3>AI collaborator</h3><p>AI reads the focused subtree and references. Its answer returns as a block.</p><Composer parentId={selected} ai onSent={refresh} /><h3>References</h3><button className="add-ref">+ Add a block reference</button><h3>Details</h3><dl><dt>View</dt><dd>{view}</dd><dt>Blocks</dt><dd>{blocks.length}</dd><dt>Tasks</dt><dd>{tasks.length}</dd></dl></div></section>
+  useEffect(() => { void dryvreDataSource.load().then(setSnapshot); }, []);
+
+  const closeSearch = useCallback(() => setSearchOpen(false), []);
+  useEffect(() => {
+    const open = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLocaleLowerCase() === 'k') { event.preventDefault(); setSearchOpen(true); }
+    };
+    document.addEventListener('keydown', open);
+    return () => document.removeEventListener('keydown', open);
+  }, []);
+
+  const visibleIds = useMemo(() => {
+    if (!snapshot || !searchMatches) return null;
+    const result = new Set(searchMatches);
+    for (const id of searchMatches) blockPath(id, snapshot.blocks).forEach((block) => result.add(block.id));
+    return result;
+  }, [searchMatches, snapshot]);
+
+  if (!snapshot) return <div className="app-loading"><span className="brand-mark">D</span><p>Opening the tree…</p></div>;
+
+  const byId = new Map(snapshot.blocks.map((block) => [block.id, block]));
+  const scope = byId.get(scopeId) ?? byId.get(snapshot.focusedRootId)!;
+  const selected = byId.get(selectedId) ?? scope;
+  const scopePath = blockPath(scope.id, snapshot.blocks);
+  const selectedPath = blockPath(selected.id, snapshot.blocks);
+  const scopeBlocks = [scope, ...descendantsOf(scope.id, snapshot.blocks)];
+  const selectedMessages = snapshot.messages.filter((message) => message.parentId === selected.id);
+
+  const selectFromTree = (id: string) => { setScopeId(id); setSelectedId(id); };
+  const setStatus = async (id: string, status: TaskStatus) => {
+    await dryvreDataSource.setStatus(id, status);
+    setSnapshot((current) => current && ({ ...current, blocks: current.blocks.map((block) => block.id === id ? { ...block, status } : block) }));
+  };
+  const sendMessage = async (body: string) => {
+    const message = await dryvreDataSource.createMessage(selected.id, body);
+    setSnapshot((current) => current && ({ ...current, messages: [...current.messages, message] }));
+  };
+  const applySearch = async (filters: SearchFilters) => {
+    const empty = !filters.text && !filters.referenceId && !filters.status && !filters.author && !filters.updated;
+    setSearchMatches(empty ? null : new Set(await dryvreDataSource.search(filters)));
+  };
+
+  return <div className="app-shell">
+    <Topbar path={scopePath} mobileTreeOpen={mobileTreeOpen} onToggleMobileTree={() => setMobileTreeOpen((open) => !open)} />
+    <Sidebar blocks={snapshot.blocks} rootId={snapshot.rootId} selectedId={scope.id} visibleIds={visibleIds} mobileOpen={mobileTreeOpen} onSelect={selectFromTree} onOpenSearch={() => setSearchOpen(true)} onClose={() => setMobileTreeOpen(false)} />
+    <main><ViewHeader title={scope.title} view={view} onView={setView} /><div className="canvas">
+      {view === 'document' && <DocumentView scopeId={scope.id} selectedId={selected.id} blocks={snapshot.blocks} references={snapshot.references} onSelect={setSelectedId} onStatus={(id, status) => void setStatus(id, status)} />}
+      {view === 'board' && <BoardView blocks={scopeBlocks} selectedId={selected.id} onSelect={setSelectedId} onStatus={(id, status) => void setStatus(id, status)} />}
+      {view === 'stream' && <StreamView selected={selected} path={selectedPath} messages={selectedMessages} onSend={(body) => void sendMessage(body)} onOpenDocument={() => setView('document')} />}
+    </div></main>
+    <ContextRail selected={selected} path={selectedPath} blocks={snapshot.blocks} references={snapshot.references} messages={selectedMessages} onOpenStream={() => setView('stream')} />
+    <SearchDialog open={searchOpen} blocks={snapshot.blocks} scopePath={scopePath} onClose={closeSearch} onApply={(filters) => void applySearch(filters)} />
   </div>;
 }
