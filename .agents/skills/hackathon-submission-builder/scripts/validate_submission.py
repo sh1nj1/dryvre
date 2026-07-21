@@ -17,12 +17,15 @@ import zipfile
 from pathlib import Path, PurePosixPath
 
 SECRET_PATH = re.compile(
-    r"(^|/)(\.env($|\.)|id_rsa|id_ed25519|.*\.(pem|key|p12)|cookies?\.json$|"
+    r"(^|/)(\.env($|\.)|id_rsa|id_ed25519|.*\.(pem|p12)|"
+    r"(?:private|secret|server|client|tls|ssl)[^/]*\.key$|cookies?\.json$|"
     r"\.npmrc$|\.yarnrc(?:\.yml)?$|\.pypirc$|\.netrc$|pip\.conf$|auth\.toml$|credentials\.toml$)",
     re.I,
 )
 FORBIDDEN_PATH = re.compile(
-    r"((^|/)node_modules(/|$)|(^|/)[^/]+\.(?:db|sqlite|sqlite3)(?:-(?:wal|shm))?$)", re.I
+    r"((^|/)node_modules(/|$)|(^|/)[^/]+\.(?:db|sqlite|sqlite3)(?:-(?:wal|shm))?$|"
+    r"(^|/)[^/]*(?:dump|backup)[^/]*\.sql$)",
+    re.I,
 )
 SECRET_TEXT = re.compile(
     r"(-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----|"
@@ -31,6 +34,7 @@ SECRET_TEXT = re.compile(
     r"[a-z][a-z0-9+.-]*://[^/\s:@]+:[^/\s@]+@[^\s'\"<>]+)",
     re.I,
 )
+DATABASE_DUMP_TEXT = re.compile(r"--\s*(?:PostgreSQL database dump|MySQL dump)", re.I)
 SRT_TIMING = re.compile(
     r"\d{2}:\d{2}:\d{2},\d{3}\s+-->\s+\d{2}:\d{2}:\d{2},\d{3}(?:\s+.*)?"
 )
@@ -52,6 +56,7 @@ def scan_text_stream(stream, location: str, errors: list[str], warnings: list[st
     tail = ""
     credential_found = False
     blocker_found = False
+    database_dump_found = False
     while chunk := stream.read(1024 * 1024):
         try:
             text = decoder.decode(chunk)
@@ -64,6 +69,9 @@ def scan_text_stream(stream, location: str, errors: list[str], warnings: list[st
         if not blocker_found and "TODO-BLOCKED:" in searchable:
             warnings.append(f"unresolved blocker in: {location}")
             blocker_found = True
+        if not database_dump_found and DATABASE_DUMP_TEXT.search(searchable):
+            errors.append(f"database dump content in: {location}")
+            database_dump_found = True
         tail = searchable[-4096:]
     try:
         final = tail + decoder.decode(b"", final=True)
@@ -73,6 +81,8 @@ def scan_text_stream(stream, location: str, errors: list[str], warnings: list[st
         errors.append(f"possible credential in: {location}")
     if not blocker_found and "TODO-BLOCKED:" in final:
         warnings.append(f"unresolved blocker in: {location}")
+    if not database_dump_found and DATABASE_DUMP_TEXT.search(final):
+        errors.append(f"database dump content in: {location}")
 
 
 def has_srt_cue(path: Path) -> bool:
