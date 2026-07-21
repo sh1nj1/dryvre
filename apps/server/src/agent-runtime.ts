@@ -21,6 +21,7 @@ import {
 } from "@dryvre/shared";
 import type { AppConfig } from "./config.js";
 import { createSessionToken } from "./auth.js";
+import type { LivePublisher } from "./live.js";
 import {
   applyOperation,
   applyOperationInTransaction,
@@ -78,7 +79,7 @@ function errorCode(error: unknown) {
 export async function createAgentRuntime(
   db: DryvreDatabase,
   config: AppConfig,
-  publish: (message: unknown) => void,
+  publish: LivePublisher,
 ) {
   const children = new Map<string, ChildProcessWithoutNullStreams>();
   const cancelled = new Set<string>();
@@ -155,6 +156,7 @@ export async function createAgentRuntime(
     targetBlockId: string,
     authorId: string,
     code: string,
+    recipientId: string,
   ) {
     if (cancelled.has(runId)) return;
     const [transitioned] = await db
@@ -188,7 +190,7 @@ export async function createAgentRuntime(
       const applied = await applyOperation(db, envelope, authorId);
       publish({ type: "applied", clientOpId: envelope.clientOpId, ...applied });
     } catch { /* the run status remains the durable failure signal */ }
-    publish({ type: "agent_run_finished", runId, errorCode: code });
+    publish({ type: "agent_run_finished", runId, errorCode: code }, recipientId);
   }
 
   async function execute(
@@ -253,7 +255,7 @@ export async function createAgentRuntime(
         .where(and(eq(agentRuns.id, runId), eq(agentRuns.status, "queued")))
         .returning({ id: agentRuns.id });
       if (!started || cancelled.has(runId)) return;
-      publish({ type: "agent_run_status", runId, status: "running" });
+      publish({ type: "agent_run_status", runId, status: "running" }, requestedBy);
       const result = await runCodex({
         config,
         runId,
@@ -290,6 +292,7 @@ export async function createAgentRuntime(
           input.targetBlockId,
           agentSubjectId,
           "timeout",
+          requestedBy,
         );
         return;
       }
@@ -299,6 +302,7 @@ export async function createAgentRuntime(
           input.targetBlockId,
           agentSubjectId,
           "codex_failed",
+          requestedBy,
         );
         return;
       }
@@ -308,6 +312,7 @@ export async function createAgentRuntime(
           input.targetBlockId,
           agentSubjectId,
           "empty_output",
+          requestedBy,
         );
         return;
       }
@@ -325,6 +330,7 @@ export async function createAgentRuntime(
           input.targetBlockId,
           agentSubjectId,
           "invalid_output",
+          requestedBy,
         );
         return;
       }
@@ -350,8 +356,8 @@ export async function createAgentRuntime(
       });
       if (!applied) return;
       publish({ type: "applied", clientOpId: envelope.clientOpId, ...applied });
-      publish({ type: "agent_run_output", runId, text: result.summary });
-      publish({ type: "agent_run_finished", runId, resultBlockId });
+      publish({ type: "agent_run_output", runId, text: result.summary }, requestedBy);
+      publish({ type: "agent_run_finished", runId, resultBlockId }, requestedBy);
     } catch (error) {
       children.delete(runId);
       await finishFailure(
@@ -359,6 +365,7 @@ export async function createAgentRuntime(
         input.targetBlockId,
         agentSubjectId ?? requestedBy,
         errorCode(error),
+        requestedBy,
       );
     } finally {
       if (managedSessionId)
@@ -410,7 +417,7 @@ export async function createAgentRuntime(
         })
         .returning();
       if (!row) throw new Error("Could not create Agent run");
-      publish({ type: "agent_run_status", runId: row.id, status: "queued" });
+      publish({ type: "agent_run_status", runId: row.id, status: "queued" }, requestedBy);
       void execute(row.id, input, requestedBy).catch(() => undefined);
       return serializeRun(row);
       } catch (error) {
@@ -456,7 +463,7 @@ export async function createAgentRuntime(
         });
         return current ? serializeRun(current) : null;
       }
-      publish({ type: "agent_run_finished", runId, errorCode: "cancelled" });
+      publish({ type: "agent_run_finished", runId, errorCode: "cancelled" }, row.requestedBy);
       return serializeRun(updated);
     },
     async close() {

@@ -12,8 +12,7 @@ import { isUnknownCodexSession, parseCodexJsonl } from "@dryvre/shared";
 import type { AppConfig } from "./config.js";
 
 const MAX_CAPTURE_BYTES = 1024 * 1024;
-const STATIC_CODEX_FILES = ["config.json", "config.toml", "instructions.md"];
-const MANAGED_PROFILE = "dryvre-managed";
+const STATIC_CODEX_FILES = ["config.json", "instructions.md"];
 const execFileAsync = promisify(execFile);
 
 function appendWithCap(current: string, chunk: string) {
@@ -75,7 +74,7 @@ async function materializeSkills(codexHome: string, skills: CompiledSkill[]) {
   await fs.rename(temporary, root);
 }
 
-export function buildManagedCodexProfile(mcpEntry: string) {
+export function buildManagedCodexConfig(mcpEntry: string) {
   return [
     "[mcp_servers.dryvre]",
     "enabled = true",
@@ -97,10 +96,10 @@ async function resolveMcpEntry(config: AppConfig) {
   });
 }
 
-async function materializeManagedProfile(codexHome: string, mcpEntry: string) {
+async function materializeManagedConfig(codexHome: string, mcpEntry: string) {
   await fs.writeFile(
-    path.join(codexHome, `${MANAGED_PROFILE}.config.toml`),
-    buildManagedCodexProfile(mcpEntry),
+    path.join(codexHome, "config.toml"),
+    buildManagedCodexConfig(mcpEntry),
     { mode: 0o600 },
   );
 }
@@ -247,14 +246,14 @@ export async function runCodex(input: {
   const mcpEntry = await resolveMcpEntry(input.config);
   await seedCodexHome(codexHome);
   await materializeSkills(codexHome, input.skills);
-  await materializeManagedProfile(codexHome, mcpEntry);
+  await materializeManagedConfig(codexHome, mcpEntry);
   const baseArgs = [
-    "--profile",
-    MANAGED_PROFILE,
     "exec",
     "--json",
     "--sandbox",
     "workspace-write",
+    "-c",
+    'approval_policy="never"',
     "--cd",
     input.workspace,
   ];

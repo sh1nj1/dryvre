@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { parseBlockDirective, type Block } from '@dryvre/shared';
-import { api } from './api';
+import { parseBlockDirective, type Block, type WsServerMessage } from '@dryvre/shared';
+import { api, connectLive } from './api';
 import { dryvreDataSource } from './data-source';
 import { BoardView, ContextRail, DocumentView, SearchDialog, Sidebar, StreamView, Topbar } from './components';
 import type { DryvreSnapshot, SearchFilters, TaskStatus, ViewMode } from './model';
@@ -56,26 +56,37 @@ export default function App() {
   const [serverBlocks, setServerBlocks] = useState<Block[]>([]);
   const [serverBacked, setServerBacked] = useState(false);
   const [focusedMessageId, setFocusedMessageId] = useState<string>();
+  const [liveOnline, setLiveOnline] = useState(false);
+  const [liveMessage, setLiveMessage] = useState<WsServerMessage>();
+
+  const syncServerTree = useCallback(async () => {
+    const next = (await api.tree(ROOT_ID)).blocks;
+    setServerBlocks(next);
+    setSnapshot(toServerSnapshot(next));
+    setServerBacked(true);
+    return next;
+  }, []);
 
   const refreshServerTree = useCallback(async (focusId?: string, revealStream = false) => {
     try {
-      const next = (await api.tree(ROOT_ID)).blocks;
+      const next = await syncServerTree();
       const focus = focusId && next.some((block) => block.id === focusId) ? focusId : ROOT_ID;
-      setServerBlocks(next);
-      setSnapshot(toServerSnapshot(next));
-      setServerBacked(true);
       setScopeId(focus);
       setSelectedId(focus);
       if (revealStream) setView('stream');
       return next;
     } catch { /* The mock snapshot remains available for standalone UI demos. */ }
-  }, []);
+  }, [syncServerTree]);
   useEffect(() => {
     void dryvreDataSource.load().then((initial) => {
       setSnapshot(initial);
       if (import.meta.env.VITE_MOCK_DATA_ONLY !== 'true') return refreshServerTree();
     });
   }, [refreshServerTree]);
+  useEffect(() => {
+    if (import.meta.env.VITE_MOCK_DATA_ONLY === 'true') return;
+    return connectLive(() => { void syncServerTree(); }, setLiveOnline, setLiveMessage);
+  }, [syncServerTree]);
 
   const closeSearch = useCallback(() => setSearchOpen(false), []);
   useEffect(() => {
@@ -197,7 +208,7 @@ export default function App() {
       {view === 'board' && <BoardView blocks={scopeBlocks} messages={snapshot.messages} selectedId={selected.id} onSelect={setSelectedId} onStatus={(id, status) => void setStatus(id, status)} />}
       {view === 'stream' && <StreamView selected={selected} messages={selectedMessages} focusedMessageId={focusedMessageId} onSend={(body) => void sendMessage(body)} />}
     </div></main>
-    <ContextRail selected={selected} path={selectedScopePath} blocks={snapshot.blocks} references={snapshot.references} messages={selectedMessages} agents={agents} agentTargets={agentTargets} onAgentSent={(targetId, resultBlockId) => { void refreshServerTree(targetId, true).then((next) => { const fallback = next?.filter((block) => block.parentId === targetId && block.rank === null).at(-1)?.id; setFocusedMessageId(resultBlockId ?? fallback); }); }} onOpenStream={() => setView('stream')} />
+    <ContextRail selected={selected} path={selectedScopePath} blocks={snapshot.blocks} references={snapshot.references} messages={selectedMessages} agents={agents} agentTargets={agentTargets} live={liveOnline} liveMessage={liveMessage} onAgentSent={(targetId, resultBlockId) => { void refreshServerTree(targetId, true).then((next) => { const fallback = next?.filter((block) => block.parentId === targetId && block.rank === null).at(-1)?.id; setFocusedMessageId(resultBlockId ?? fallback); }); }} onOpenStream={() => setView('stream')} />
     <SearchDialog open={searchOpen} blocks={snapshot.blocks} scopePath={scopePath} onClose={closeSearch} onApply={(filters) => void applySearch(filters)} />
   </div>;
 }

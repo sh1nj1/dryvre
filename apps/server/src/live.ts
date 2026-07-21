@@ -5,14 +5,19 @@ import type { DryvreDatabase } from '@dryvre/db';
 import { applyOperation } from './block-service.js';
 
 export function registerLive(app: FastifyInstance, db: DryvreDatabase) {
-  const clients = new Set<WebSocket>();
-  const publish = (message: unknown) => {
+  const clients = new Map<WebSocket, string>();
+  const publish = (message: unknown, recipientId?: string) => {
     const data = JSON.stringify(message);
-    for (const client of clients) if (client.readyState === client.OPEN) client.send(data);
+    for (const [client, actorId] of clients)
+      if (
+        client.readyState === client.OPEN &&
+        (!recipientId || actorId === recipientId)
+      )
+        client.send(data);
   };
 
   app.get('/api/live', { websocket: true }, (socket, request) => {
-    clients.add(socket);
+    clients.set(socket, request.actorId);
     socket.send(JSON.stringify({ type: 'ready', actorId: request.actorId }));
     socket.on('message', async (raw) => {
       let clientOpId = 'unknown';
@@ -29,3 +34,5 @@ export function registerLive(app: FastifyInstance, db: DryvreDatabase) {
   });
   return publish;
 }
+
+export type LivePublisher = ReturnType<typeof registerLive>;
