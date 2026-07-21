@@ -136,20 +136,18 @@ export function BoardView({ blocks, messages, selectedId, onSelect, onStatus }: 
   })}</div>;
 }
 
-export function StreamView({ selected, messages, focusedMessageId, agents, agentTarget, live, liveMessage, onSend, onAgentSent }: { selected: DryvreBlock; messages: BlockMessage[]; focusedMessageId: string | undefined; agents: Block[]; agentTarget: Block | undefined; live: boolean; liveMessage: WsServerMessage | undefined; onSend: (body: string) => void; onAgentSent: (targetId: string, resultBlockId?: string) => void }) {
+export function StreamView({ selected, messages, focusedMessageId, agents, agentTarget, live, liveMessage, contextSummary, onSend, onAgentSent }: { selected: DryvreBlock; messages: BlockMessage[]; focusedMessageId: string | undefined; agents: Block[]; agentTarget: Block | undefined; live: boolean; liveMessage: WsServerMessage | undefined; contextSummary: string; onSend: (body: string) => void; onAgentSent: (targetId: string, resultBlockId?: string) => void }) {
   const focusedMessage = useRef<HTMLElement>(null);
   useEffect(() => { focusedMessage.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }); }, [focusedMessageId, messages]);
   return <div className="stream-layout">
     {messages.length ? messages.map((message) => <article ref={message.id === focusedMessageId ? focusedMessage : undefined} className={`message ${message.agent ? 'agent' : ''} ${message.id === focusedMessageId ? 'result-focus' : ''}`} key={message.id}><div className="avatar">{message.initials}</div><div><div className="message-head"><strong>{message.author}</strong><span>{message.timeLabel}</span></div><div className="message-body"><p>{message.body}</p>{message.createdBlocks && <div className="agent-output">{message.createdBlocks.map((body) => <div className="agent-block" key={body}>{body}</div>)}</div>}</div><div className="message-actions">Reply · Reference · •••</div></div></article>) : <div className="empty-stream"><strong>No messages yet</strong><span>Start a conversation in this block.</span></div>}
-    <StreamComposer selected={selected} agents={agents} target={agentTarget} live={live} liveMessage={liveMessage} onSend={onSend} onSent={onAgentSent} />
+    <StreamComposer selected={selected} agents={agents} target={agentTarget} live={live} liveMessage={liveMessage} contextSummary={contextSummary} onSend={onSend} onSent={onAgentSent} />
   </div>;
 }
-
-export function ContextRail({ selected, path, blocks, references, messages, onOpenStream }: { selected: DryvreBlock; path: DryvreBlock[]; blocks: DryvreBlock[]; references: BlockReference[]; messages: BlockMessage[]; onOpenStream: () => void }) {
+export function ContextRail({ selected, path, blocks, references }: { selected: DryvreBlock; path: DryvreBlock[]; blocks: DryvreBlock[]; references: BlockReference[] }) {
   const relevantRefs = references.filter((reference) => reference.fromId === selected.id);
   const descendants = descendantsOf(selected.id, blocks);
   return <aside className="context-rail"><header className="rail-head"><strong>Block context</strong><span>Auto-built</span></header><div className="rail-scroll"><div className="inspector-label">Selected block</div><div className="selected-card"><span className="path">{path.slice(0, -1).map((block) => block.title).join(' / ') || 'Root'}</span><h3>{selected.title}</h3><p>{selected.bodyMd ?? 'A first-class block in the shared tree.'}</p><div className="selected-meta">Updated {selected.updatedLabel} · {selected.author}</div></div>
-    {messages.length > 0 && <button className="messages-card" onClick={onOpenStream}><span className="messages-icon">◉</span><span className="messages-copy"><strong>{messages.length} messages</strong><span>{[...new Set(messages.map((message) => message.author))].join(', ')}</span></span><span className="messages-arrow">→</span></button>}
     <div className="inspector-label section-gap">AI reads</div><ul className="context-list">{path.map((block, index) => <li className={`context-item ${block.id === selected.id ? 'current' : ''}`} key={block.id}>{block.title}<small>{block.id === selected.id ? `current block · ${descendants.length} descendants` : index === 0 ? `root · ${descendantsOf(block.id, blocks).length} descendant blocks` : 'parent block'}</small></li>)}</ul>
     <div className="inspector-label section-gap">References</div>{relevantRefs.length ? relevantRefs.map((reference) => { const target = blocks.find((block) => block.id === reference.toId); return target && <div className="reference-card" key={reference.toId}><strong>↗ {target.title}</strong><span>{reference.summary}</span></div>; }) : <p className="empty-copy">No explicit references.</p>}
   </div></aside>;
@@ -199,7 +197,7 @@ function agentError(value: string) {
   return agentErrors[value] ?? value.replaceAll('_', ' ');
 }
 
-export function StreamComposer({ selected, agents, target, live, liveMessage, onSend, onSent }: { selected: DryvreBlock; agents: Block[]; target: Block | undefined; live: boolean; liveMessage: WsServerMessage | undefined; onSend: (body: string) => void; onSent: (targetId: string, resultBlockId?: string) => void }) {
+export function StreamComposer({ selected, agents, target, live, liveMessage, contextSummary, onSend, onSent }: { selected: DryvreBlock; agents: Block[]; target: Block | undefined; live: boolean; liveMessage: WsServerMessage | undefined; contextSummary: string; onSend: (body: string) => void; onSent: (targetId: string, resultBlockId?: string) => void }) {
   const [agentId, setAgentId] = useState('');
   const [value, setValue] = useState('');
   const [run, setRun] = useState<AgentRun>();
@@ -309,6 +307,7 @@ export function StreamComposer({ selected, agents, target, live, liveMessage, on
       {run && <div className={`run-state run-${run.status}`}><i />{runLabels[run.status]}{run.errorCode && <small>{agentError(run.errorCode)}</small>}{busy && <button onClick={() => void cancel()}>Cancel</button>}</div>}
       {error && <div className="agent-error">{error}</div>}
     </div>}
-    <div className="composer-actions"><span className="context-chip">◎ {selected.title}</span><button className="tool-pill">@ Reference</button>{agents.length > 0 && target && <select className="composer-mode" aria-label="Send as" value={agentId} onChange={(event) => setAgentId(event.target.value)}><option value="">Message</option>{agents.map((agent) => <option value={agent.id} key={agent.id}>{(agent.bodyMd ?? '').match(/^#\s+@agent\s+([^\n]+)/)?.[1] ?? 'Agent'}</option>)}</select>}<button className={agentSelected ? 'agent-run-btn' : 'send-btn'} aria-label={agentSelected ? 'Run Agent' : 'Send message'} disabled={!value.trim() || (agentSelected && (Boolean(busy) || !readiness?.ready || !target))} onClick={() => void send()}>{agentSelected ? (busy ? 'Running' : 'Run') : '↑'}</button></div>
+    <div className="composer-context"><span className="context-chip">◎ {selected.title}</span><span>{contextSummary}</span></div>
+    <div className="composer-actions"><button className="tool-pill">@ Reference</button>{agents.length > 0 && target && <select className="composer-mode" aria-label="Send as" value={agentId} onChange={(event) => setAgentId(event.target.value)}><option value="">Message</option>{agents.map((agent) => <option value={agent.id} key={agent.id}>{(agent.bodyMd ?? '').match(/^#\s+@agent\s+([^\n]+)/)?.[1] ?? 'Agent'}</option>)}</select>}<button className={agentSelected ? 'agent-run-btn' : 'send-btn'} aria-label={agentSelected ? 'Run Agent' : 'Send message'} disabled={!value.trim() || (agentSelected && (Boolean(busy) || !readiness?.ready || !target))} onClick={() => void send()}>{agentSelected ? (busy ? 'Running' : 'Run') : '↑'}</button></div>
   </div>;
 }
