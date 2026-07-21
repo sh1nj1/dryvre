@@ -71,8 +71,7 @@ async function perform(step) {
     case "wait": await page.waitForTimeout(step.durationMs); break;
     case "waitFor": await page.locator(step.selector).waitFor({ state: "visible", timeout }); break;
     case "assertText": {
-      const text = await page.locator(step.selector).innerText({ timeout });
-      if (!text.includes(step.text)) throw new Error(`expected ${step.selector} to contain ${JSON.stringify(step.text)}; got ${JSON.stringify(text)}`);
+      await page.locator(step.selector).filter({ hasText: String(step.text) }).waitFor({ state: "visible", timeout });
       break;
     }
     case "assertUrl": if (!page.url().includes(step.pattern)) throw new Error(`expected URL to contain ${step.pattern}; got ${page.url()}`); break;

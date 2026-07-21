@@ -326,9 +326,12 @@ def main() -> int:
                 errors.append(f"checksum mismatch: {relative}")
 
     for path in root.rglob("*"):
+        relative = path.relative_to(root).as_posix()
+        if path.is_symlink():
+            errors.append(f"symbolic link in package: {relative}")
+            continue
         if not path.is_file():
             continue
-        relative = path.relative_to(root).as_posix()
         if FORBIDDEN_PATH.search(relative):
             errors.append(f"forbidden packaged path: {relative}")
         if SECRET_PATH.search(relative):
