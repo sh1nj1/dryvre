@@ -222,3 +222,35 @@ test('runs a ready Local Agent, focuses its result, and can cancel another run',
   await page.getByRole('button', { name: 'Cancel' }).click();
   await expect(page.locator('.run-state')).toContainText('Cancelled');
 });
+
+test('recovers to Message mode when navigating from an agent to a non-target block', async ({ page }) => {
+  const rootId = '00000000-0000-4000-8000-000000000010';
+  const targetId = '00000000-0000-4000-8000-000000000011';
+  const productId = '00000000-0000-4000-8000-000000000020';
+  const createdAt = new Date('2026-07-21T00:00:00.000Z').toISOString();
+  const block = (id: string, parentId: string | null, path: string, rank: string | null, bodyMd: string) => ({ id, parentId, path, rank, bodyMd, status: null, authorId: '00000000-0000-4000-8000-000000000001', version: 0, createdAt, updatedAt: createdAt });
+  const blocks = [
+    block(rootId, null, `/${rootId}/`, 'a', '# Dryvre'),
+    block(targetId, rootId, `/${rootId}/${targetId}/`, 'a', '# Demo target'),
+    block(productId, rootId, `/${rootId}/${productId}/`, 'b', '# @agent product-engineer\nImplement focused changes.'),
+    block('00000000-0000-4000-8000-000000000021', productId, `/${rootId}/${productId}/config/`, 'a', '```agent-config\n{"workspace":"dryvre"}\n```'),
+  ];
+  await page.route('**/api/**', async (route) => {
+    const url = new URL(route.request().url());
+    if (url.pathname === `/api/trees/${rootId}`) return route.fulfill({ json: { blocks } });
+    if (url.pathname === '/api/agents/readiness') return route.fulfill({ json: { ready: true, mode: 'fake', version: 'fake' } });
+    if (/^\/api\/agents\/.+\/validate$/.test(url.pathname)) return route.fulfill({ json: { valid: true, agent: { slug: 'demo' }, skills: [] } });
+    return route.fulfill({ status: 404, json: { error: 'Not found' } });
+  });
+
+  await page.goto('/');
+  await page.locator('.tree-row').filter({ hasText: 'Demo target' }).click();
+  await page.getByRole('tab', { name: /Stream/ }).click();
+  await page.getByLabel('Send as').selectOption(productId);
+  await expect(page.getByRole('button', { name: 'Run Agent' })).toBeVisible();
+
+  // Navigating to the @agent block (not a valid agent target) must not trap the composer in Agent mode.
+  await page.locator('.tree-row').filter({ hasText: '@agent product-engineer' }).click();
+  await expect(page.getByRole('button', { name: 'Send message' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Run Agent' })).toHaveCount(0);
+});

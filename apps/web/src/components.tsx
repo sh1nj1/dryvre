@@ -241,8 +241,10 @@ export function StreamComposer({ selected, agents, target, live, liveMessage, on
   }, [liveMessage]);
 
   useEffect(() => {
-    if (agentId && !agents.some((agent) => agent.id === agentId)) setAgentId('');
-  }, [agentId, agents]);
+    // Fall back to Message mode when the target is gone or the agent left the list,
+    // otherwise the mode <select> disappears and the composer stays stuck in Agent mode.
+    if (agentId && (!target || !agents.some((agent) => agent.id === agentId))) setAgentId('');
+  }, [agentId, agents, target]);
 
   useEffect(() => {
     if (!agentId) return;
