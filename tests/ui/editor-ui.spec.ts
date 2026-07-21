@@ -1,5 +1,45 @@
 import { expect, test } from '@playwright/test';
 
+test('resizes all three desktop panels and gives the companion Stream a wider default', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto('/app');
+
+  const shell = page.locator('.app-shell');
+  const sidebar = page.locator('.sidebar');
+  const workspace = page.locator('.workspace');
+  const stream = page.locator('.stream-host-rail');
+  const leftResizer = page.getByRole('separator', { name: 'Resize tree panel' });
+  const rightResizer = page.getByRole('separator', { name: 'Resize stream panel' });
+  const initialSidebar = (await sidebar.boundingBox())!;
+  const initialWorkspace = (await workspace.boundingBox())!;
+  const initialStream = (await stream.boundingBox())!;
+
+  expect(initialStream.width).toBeGreaterThanOrEqual(400);
+  await leftResizer.hover();
+  const leftHandle = (await leftResizer.boundingBox())!;
+  await page.mouse.down();
+  await page.mouse.move(leftHandle.x + leftHandle.width / 2 + 56, leftHandle.y + 100);
+  await page.mouse.up();
+  await expect(leftResizer).toHaveAttribute('aria-valuenow', String(Math.round(initialSidebar.width + 56)));
+
+  const rightHandle = (await rightResizer.boundingBox())!;
+  await page.mouse.move(rightHandle.x + rightHandle.width / 2, rightHandle.y + 100);
+  await page.mouse.down();
+  await page.mouse.move(rightHandle.x - 64, rightHandle.y + 100);
+  await page.mouse.up();
+
+  const resizedSidebar = (await sidebar.boundingBox())!;
+  const resizedWorkspace = (await workspace.boundingBox())!;
+  const resizedStream = (await stream.boundingBox())!;
+  expect(resizedSidebar.width).toBeGreaterThan(initialSidebar.width);
+  expect(resizedStream.width).toBeGreaterThan(initialStream.width);
+  expect(resizedWorkspace.width).toBeLessThan(initialWorkspace.width);
+  await page.reload();
+  await expect(shell).toBeVisible();
+  expect((await sidebar.boundingBox())!.width).toBeCloseTo(resizedSidebar.width, 0);
+  expect((await stream.boundingBox())!.width).toBeCloseTo(resizedStream.width, 0);
+});
+
 test('keeps view navigation in the topbar and removes redundant chrome', async ({ page }) => {
   await page.goto('/app');
 
