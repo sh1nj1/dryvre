@@ -1,5 +1,7 @@
+import type { BlockStatus } from '@dryvre/shared';
+
 export type ViewMode = 'document' | 'board' | 'stream';
-export type TaskStatus = 'todo' | 'in_progress' | 'done';
+export type TaskStatus = BlockStatus;
 
 export interface DryvreBlock {
   id: string;

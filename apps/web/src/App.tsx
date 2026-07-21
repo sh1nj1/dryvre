@@ -19,13 +19,12 @@ function toServerSnapshot(blocks: Block[]): DryvreSnapshot {
     rootId: ROOT_ID,
     focusedRootId: ROOT_ID,
     blocks: blocks.filter((block) => block.rank !== null).map((block) => {
-      const status = block.status === 'blocked' ? 'in_progress' : block.status;
       return {
         id: block.id,
         parentId: block.parentId,
         title: titleOf(block),
         bodyMd: block.bodyMd,
-        ...(status ? { status } : {}),
+        ...(block.status ? { status: block.status } : {}),
         author: block.authorId === HUMAN_ID ? 'Soonoh' : 'Dryvre Agent',
         updatedLabel: new Date(block.updatedAt).toLocaleString(),
         canonical: true,

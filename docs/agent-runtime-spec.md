@@ -2,10 +2,11 @@
 
 ## 문서 상태
 
-- 상태: 해커톤 MVP 구현 완료
+- 상태: Local Agent 런타임 Phase 0~3 구현 완료, 고정 작업 루프 확장 활성
 - 목표: 해커톤 데모에서 여러 Agent 블록을 정의하고, 블록 트리에서 관리하는 Skill을 골라 Local Codex CLI로 실행한다.
 - 구현 기준: 이 문서의 `Phase 0`부터 `Phase 3`까지
-- 후속 범위: 원격 실행, 자율 트리거와 Agent 간 자동 위임
+- 활성 확장: [에이전트 작업 루프](agent-loop-spec.md)의 PM Agent → 사용자 활성화 → Developer Agent 고정 루프
+- 후속 범위: 원격 실행, 범용 트리거 빌더와 Agent 간 임의 자동 위임
 
 ## 해커톤 MVP 보안 범위 결정
 
@@ -152,6 +153,8 @@ POST   /api/agents/:blockId/validate
 
 `POST /api/agent-runs`는 run을 만든 뒤 즉시 `202`를 반환한다. 시작과 취소는 콘텐츠용 7개 block op에 추가하지 않는다. Agent가 만든 결과 블록은 기존 `create` op를 사용하므로 op log와 실시간 동기화 규칙을 그대로 따른다.
 
+`agent_run.status`의 `queued|running|succeeded|failed|cancelled`는 프로세스 상태이며, 작업 블록의 `todo|in_progress|blocked|done`과 다른 축이다. 사용자 입력 대기는 작업 블록의 `blocked`와 상위 `agent_loop.state=waiting_input`으로 표현하고 `agent_run.status`에 새 값을 추가하지 않는다.
+
 ### WebSocket
 
 기존 연결에 아래 서버 이벤트만 추가한다.
@@ -258,7 +261,7 @@ Agent 목록은 별도 API 엔티티가 아니라 현재 root에서 `@agent` Mar
 - Dryvre MCP를 managed Codex config에 안전하게 주입하여 실행 중 추가 block read/write 허용
 - `codex app-server` 또는 ACP 기반의 양방향 세션과 richer event
 - 원격 sandbox, per-run worktree, 승인 UI, 영속 queue와 비용 정책
-- 사람이 승인한 Agent 간 위임과 자동 트리거
+- 범용 트리거 빌더와 Agent 간 임의 자동 위임. 사용자가 `todo`로 활성화하는 고정 작업 루프는 [에이전트 작업 루프](agent-loop-spec.md)의 현재 범위다.
 
 ## 테스트 전략
 
