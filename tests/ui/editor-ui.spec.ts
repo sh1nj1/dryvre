@@ -146,6 +146,23 @@ test('sends with Enter, keeps Shift+Enter for new lines, and ignores IME confirm
   await expect(composer).toHaveValue('');
 });
 
+test('keeps Enter as a newline in the mobile Stream composer', async ({ page }) => {
+  await page.setViewportSize({ width: 480, height: 900 });
+  await page.goto('/app');
+
+  await page.locator('.mobile-view-select').selectOption('stream');
+  const composer = page.locator('.stream-host-main').getByPlaceholder('Write to this block');
+  await expect(composer).toBeVisible();
+  await expect(page.locator('.composer-shortcut-hint')).toBeHidden();
+
+  await composer.fill('Mobile line');
+  await composer.press('Enter');
+  await expect(composer).toHaveValue('Mobile line\n');
+
+  await page.locator('.stream-host-main').getByRole('button', { name: 'Send message' }).click();
+  await expect(composer).toHaveValue('');
+});
+
 test('inserts and edits a block from the hover affordance', async ({ page }) => {
   await page.goto('/app');
 
