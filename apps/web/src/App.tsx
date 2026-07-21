@@ -75,13 +75,12 @@ export default function App() {
     return next;
   }, []);
 
-  const refreshServerTree = useCallback(async (focusId?: string, revealStream = false) => {
+  const refreshServerTree = useCallback(async (focusId?: string) => {
     try {
       const next = await syncServerTree();
       const focus = focusId && next.some((block) => block.id === focusId) ? focusId : ROOT_ID;
       setScopeId(focus);
       setSelectedId(focus);
-      if (revealStream) setView('stream');
       return next;
     } catch { /* The mock snapshot remains available for standalone UI demos. */ }
   }, [syncServerTree]);
@@ -136,7 +135,7 @@ export default function App() {
   });
   const agentTarget = agentTargets.find((block) => block.id === selected.id);
   const handleAgentSent = (targetId: string, resultBlockId?: string) => {
-    void refreshServerTree(targetId, true).then((next) => {
+    void syncServerTree().then((next) => {
       const fallback = next?.filter((block) => block.parentId === targetId && block.rank === null).at(-1)?.id;
       setFocusedMessageId(resultBlockId ?? fallback);
     });
@@ -222,16 +221,23 @@ export default function App() {
     setSelectedId(scope.id);
   };
 
+  const contextBlockCount = descendantsOf(selected.id, snapshot.blocks).length + 1;
+  const contextReferenceCount = snapshot.references.filter((reference) => reference.fromId === selected.id).length;
+  const contextSummary = `${contextBlockCount} ${contextBlockCount === 1 ? 'block' : 'blocks'} · ${contextReferenceCount} ${contextReferenceCount === 1 ? 'reference' : 'references'}`;
+
   return <div className="app-shell">
     <Topbar path={scopePath} view={view} mobileTreeOpen={mobileTreeOpen} onView={setView} onToggleMobileTree={() => setMobileTreeOpen((open) => !open)} />
     <Sidebar blocks={snapshot.blocks} rootId={snapshot.rootId} inboxId={inboxId} selectedId={scope.id} visibleIds={visibleIds} mobileOpen={mobileTreeOpen} onSelect={selectFromTree} onOpenInbox={(id) => { selectFromTree(id); setView('stream'); setMobileTreeOpen(false); }} onOpenSearch={() => setSearchOpen(true)} onClose={() => setMobileTreeOpen(false)} />
-    <main><div className="canvas">
+    <main className={view === 'stream' ? 'workspace workspace-hidden' : 'workspace'}><div className="canvas">
       {view === 'document' && <DocumentView scopeId={scope.id} selectedId={selected.id} editingId={editingId} blocks={snapshot.blocks} references={snapshot.references} onSelect={setSelectedId} onEditStart={setEditingId} onEditEnd={(id) => setEditingId((current) => current === id ? null : current)} onEdit={editBlock} onCreateAfter={createBlockAfter} onDelete={deleteBlock} onStatus={(id, status) => void setStatus(id, status)} />}
       {view === 'board' && <BoardView blocks={scopeBlocks} messages={snapshot.messages} selectedId={selected.id} onSelect={setSelectedId} onStatus={(id, status) => void setStatus(id, status)} />}
-      {/* Stay mounted across view switches so an in-flight Agent run keeps its poller and completion observer alive. */}
-      <div className="stream-host" style={view === 'stream' ? undefined : { display: 'none' }}><StreamView selected={selected} messages={selectedMessages} focusedMessageId={focusedMessageId} agents={agents} agentTarget={agentTarget} live={liveOnline} liveMessage={liveMessage} onSend={(body, parentId) => void sendMessage(body, parentId)} onAgentSent={handleAgentSent} /></div>
     </div></main>
-    <ContextRail selected={selected} path={selectedScopePath} blocks={snapshot.blocks} references={snapshot.references} messages={selectedMessages} onOpenStream={() => setView('stream')} />
+    {/* Move one mounted Stream between the work surface and companion rail so Agent observers survive view switches. */}
+    <section className={`stream-host ${view === 'stream' ? 'stream-host-main' : 'stream-host-rail'}`} aria-label={`Stream for ${selected.title}`}>
+      <header className="rail-head stream-rail-head"><div><strong>Stream</strong><span>{selected.title}</span></div><button aria-label="Open full Stream" onClick={() => setView('stream')}>↗</button></header>
+      <StreamView selected={selected} messages={selectedMessages} focusedMessageId={focusedMessageId} agents={agents} agentTarget={agentTarget} live={liveOnline} liveMessage={liveMessage} contextSummary={contextSummary} onSend={(body, parentId) => void sendMessage(body, parentId)} onAgentSent={handleAgentSent} />
+    </section>
+    {view === 'stream' && <ContextRail selected={selected} path={selectedScopePath} blocks={snapshot.blocks} references={snapshot.references} />}
     <SearchDialog open={searchOpen} blocks={snapshot.blocks} scopePath={scopePath} onClose={closeSearch} onApply={(filters) => void applySearch(filters)} />
   </div>;
 }
