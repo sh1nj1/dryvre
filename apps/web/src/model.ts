@@ -77,9 +77,17 @@ function firstContentLine(bodyMd: string) {
   return { line: (lines[i] ?? '').replace(/\r$/, ''), rest: lines.slice(i + 1).join('\n') };
 }
 
+// CommonMark backslash escapes: a backslash before an ASCII-punctuation character
+// makes that character literal and drops the backslash; a backslash before any
+// other character stays literal. `blockTitle` extracts raw Markdown source for
+// plain-text contexts (sidebar/breadcrumb/card), so unescape it to match how the
+// heading renders — e.g. `# Issue \#` reads as `Issue #`, not `Issue \#`.
+const MARKDOWN_ESCAPE = /\\([!-/:-@[-`{-~])/g;
+
 export function blockTitle(block: Pick<DryvreBlock, 'title' | 'bodyMd'>) {
   const heading = firstContentLine(block.bodyMd ?? '').line.match(ATX_HEADING);
-  return heading?.[1]?.trim() || block.title;
+  const text = heading?.[1]?.trim();
+  return text ? text.replace(MARKDOWN_ESCAPE, '$1') : block.title;
 }
 
 export function blockSummary(block: Pick<DryvreBlock, 'bodyMd'>) {

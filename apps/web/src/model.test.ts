@@ -37,6 +37,17 @@ describe('Markdown block projections', () => {
     expect(blockTitle({ title: 'x', bodyMd: '# foo #' })).toBe('foo');
   });
 
+  it('unescapes CommonMark backslash escapes so the title matches the rendered heading', () => {
+    // An escaped `\#` is heading text (a literal `#`), not a closing sequence, so
+    // it is retained; the backslash must be dropped to match how ReactMarkdown
+    // renders it. The same applies to any escaped ASCII punctuation.
+    expect(blockTitle({ title: 'x', bodyMd: '# Issue \\#' })).toBe('Issue #');
+    expect(blockTitle({ title: 'x', bodyMd: '# foo \\*bar\\*' })).toBe('foo *bar*');
+    expect(blockTitle({ title: 'x', bodyMd: '# see \\[spec\\]' })).toBe('see [spec]');
+    // A backslash before a non-punctuation char stays literal.
+    expect(blockTitle({ title: 'x', bodyMd: '# path C:\\dir' })).toBe('path C:\\dir');
+  });
+
   it('does not treat an empty heading as a projected title, keeping the body intact', () => {
     // `#` with no text is an empty heading; horizontal-only whitespace after the
     // hashes stops `\s+` from consuming the newline and swallowing the summary.
