@@ -1,5 +1,53 @@
 import { expect, test } from '@playwright/test';
 
+test('keeps search full-width and opens Inbox from the topbar beside the avatar', async ({ page }) => {
+  const rootId = '00000000-0000-4000-8000-000000000010';
+  const inboxId = '00000000-0000-4000-8000-000000000110';
+  const questionId = '00000000-0000-4000-8000-000000000111';
+  const authorId = '00000000-0000-4000-8000-000000000001';
+  const createdAt = '2026-07-22T00:00:00.000Z';
+  const block = (id: string, parentId: string | null, rank: string | null, bodyMd: string) => ({
+    id,
+    parentId,
+    path: parentId ? `/${rootId}/${id}/` : `/${id}/`,
+    rank,
+    bodyMd,
+    status: null,
+    authorId,
+    version: 0,
+    createdAt,
+    updatedAt: createdAt,
+  });
+  const blocks = [
+    block(rootId, null, 'a', '# Workspace'),
+    block(inboxId, rootId, 'b', '# Inbox'),
+    block(questionId, inboxId, null, 'Approval required before publishing.'),
+  ];
+
+  await page.route('**/api/**', async (route) => {
+    const url = new URL(route.request().url());
+    if (url.pathname === `/api/trees/${rootId}`) return route.fulfill({ json: { blocks } });
+    if (url.pathname === '/api/me/inbox') return route.fulfill({ json: { subjectId: authorId, blockId: inboxId } });
+    return route.fulfill({ status: 404, json: { error: 'Not found' } });
+  });
+
+  await page.goto('/app');
+  const topActions = page.locator('.top-actions');
+  const inbox = topActions.getByRole('button', { name: 'Inbox' });
+  const search = page.getByRole('button', { name: /Search & filter/ });
+
+  await expect(topActions.locator('.inbox-trigger + .avatar')).toHaveCount(1);
+  await expect(page.locator('.side-tools .inbox-trigger')).toHaveCount(0);
+  await expect(search).toBeVisible();
+  expect((await search.boundingBox())!.width).toBeGreaterThan(200);
+
+  await inbox.click();
+  await expect(inbox).toHaveClass(/active/);
+  await expect(page.getByRole('tab', { name: /Stream/ })).toHaveAttribute('aria-selected', 'true');
+  await expect(page.locator('.stream-host-main')).toHaveAttribute('aria-label', 'Stream for Inbox');
+  await expect(page.getByText('Approval required before publishing.')).toBeVisible();
+});
+
 test('resizes all three desktop panels and gives the companion Stream a wider default', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.goto('/app');

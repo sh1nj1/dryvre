@@ -34,7 +34,7 @@
 | 0:15–0:35 | 출시 요구사항 아래 스트림을 열고 `@PM Agent, turn this into an executable launch task`라고 요청한다. | “First, the PM Agent turns scattered context into an executable contract.” |
 | 0:35–0:55 | PM Agent가 결과물, 완료 조건, 제약, 검증 방법과 `@Developer Agent`가 포함된 자식 블록을 작성한다. 상태는 아직 없다. | “The AI creates an editable block in the same tree, not a separate ticket.” |
 | 0:55–1:08 | 사용자가 작업을 검토하고 `todo`로 바꾼다. 보드에 같은 ID의 카드가 나타난다. | “Moving it to To do is the human's explicit approval to execute.” |
-| 1:08–1:25 | Developer Agent가 사전 검증한다. 공개 승인 조건이 빠져 있어 카드가 `todo`에서 `blocked`로 이동하고 왼쪽 Inbox에 새 요청 표시가 나타난다. | “The Developer Agent checks the completion contract first. A missing decision moves the task to Blocked instead of being guessed away.” |
+| 1:08–1:25 | Developer Agent가 사전 검증한다. 공개 승인 조건이 빠져 있어 카드가 `todo`에서 `blocked`로 이동하고 오른쪽 상단 Inbox에 새 요청이 나타난다. | “The Developer Agent checks the completion contract first. A missing decision moves the task to Blocked instead of being guessed away.” |
 | 1:25–1:45 | Inbox를 열어 원래 작업이 참조된 질문을 확인한다. 사용자가 답글로 공개를 승인한다. | “Blocking questions and approval requests arrive in one personal Inbox stream.” |
 | 1:45–2:05 | 작업 화면으로 돌아오면 같은 카드가 `blocked → todo → in_progress`로 전이되고 Developer Agent가 실행 로그와 결과 블록을 추가한다. | “With the answer provided, the task returns to To do, passes validation, and the agent claims it as In progress.” |
 | 2:05–2:25 | 검증 체크가 성공하고 결과·증거 자식 블록이 보인 뒤 카드가 `done`으로 이동한다. | “Only verified work, recorded with evidence, can move to Done.” |
