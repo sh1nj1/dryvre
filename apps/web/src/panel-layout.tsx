@@ -84,16 +84,25 @@ export function usePanelLayout(view: ViewMode) {
     return () => window.removeEventListener('resize', updateViewport);
   }, []);
 
-  // Persist only user-initiated changes. The initial `widths` is viewport-derived
-  // (defaults() falls back to compact values at <=1100px, where resizers are also
-  // hidden below 850px), so persisting it on mount would store a value the user
-  // never chose and later mask the desktop defaults. `touched` flips only inside the
-  // resize/reset handlers, so this writes real preferences and never the fallback —
-  // and stays correct under StrictMode's double-invoked mount effect.
-  const touched = useRef(false);
+  // Persist only the panels the user actually resized/reset. The initial `widths` is
+  // viewport-derived (defaults() falls back to compact values at <=1100px, where
+  // resizers are also hidden below 850px), so an untouched panel still holds a fallback
+  // the user never chose. Writing the whole object would store those fallbacks (e.g.
+  // stream: 360, inspector: 320) after the user resized only one panel, masking the
+  // desktop defaults on a later wide-viewport visit. `touched` tracks *which* keys were
+  // changed; we merge only those into any existing stored prefs so untouched panels keep
+  // falling back per-key in loadWidths(). Empty set on mount also keeps this StrictMode-safe.
+  const touched = useRef<Set<keyof StoredPanelWidths>>(new Set());
   useEffect(() => {
-    if (!touched.current) return;
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(widths));
+    if (touched.current.size === 0) return;
+    let stored: Partial<StoredPanelWidths> = {};
+    try {
+      stored = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '{}') as Partial<StoredPanelWidths>;
+    } catch {
+      stored = {};
+    }
+    for (const key of touched.current) stored[key] = widths[key];
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(stored));
   }, [widths]);
 
   return {
@@ -104,19 +113,19 @@ export function usePanelLayout(view: ViewMode) {
     rightMin,
     rightMax,
     setLeft: (left: number) => {
-      touched.current = true;
+      touched.current.add('left');
       setWidths((current) => ({ ...current, left: clamp(left, LEFT_MIN, leftMax) }));
     },
     setRight: (right: number) => {
-      touched.current = true;
+      touched.current.add(rightKey);
       setWidths((current) => ({ ...current, [rightKey]: clamp(right, rightMin, rightMax) }));
     },
     resetLeft: () => {
-      touched.current = true;
+      touched.current.add('left');
       setWidths((current) => ({ ...current, left: defaults(viewportWidth).left }));
     },
     resetRight: () => {
-      touched.current = true;
+      touched.current.add(rightKey);
       setWidths((current) => ({ ...current, [rightKey]: defaults(viewportWidth)[rightKey] }));
     },
   };
