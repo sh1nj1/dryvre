@@ -20,7 +20,7 @@ from pathlib import Path, PurePosixPath
 
 SECRET_PATH = re.compile(
     r"(^|/)(\.env(?:$|\.(?!(?:example|sample|template|dist)$)[^/]+$)|"
-    r"id_rsa|id_ed25519|.*\.(pem|p12)|"
+    r"id_rsa|id_ed25519|.*\.(pem|p12|pfx)|"
     r"(?:private|secret|server|client|tls|ssl)[^/]*\.key$|cookies?\.json$|"
     r"client_secret[^/]*\.json$|\.npmrc$|\.yarnrc(?:\.yml)?$|\.pypirc$|\.netrc$|"
     r"pip\.conf$|auth\.toml$|credentials\.toml$)",
@@ -40,7 +40,11 @@ SECRET_TEXT = re.compile(
     r"[a-z][a-z0-9+.-]*://[^/\s:@]+:[^/\s@]+@[^\s'\"<>]+)",
     re.I,
 )
-DATABASE_DUMP_TEXT = re.compile(r"--\s*(?:PostgreSQL database dump|MySQL dump)", re.I)
+DATABASE_DUMP_TEXT = re.compile(
+    r"(?:--\s*(?:PostgreSQL database dump|MySQL dump)|"
+    r"PRAGMA\s+foreign_keys\s*=\s*OFF\s*;\s*BEGIN\s+TRANSACTION\s*;)",
+    re.I,
+)
 SRT_TIMING = re.compile(
     r"\d{2}:\d{2}:\d{2},\d{3}\s+-->\s+\d{2}:\d{2}:\d{2},\d{3}(?:\s+.*)?"
 )

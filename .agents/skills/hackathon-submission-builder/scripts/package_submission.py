@@ -16,7 +16,7 @@ from pathlib import Path
 FORBIDDEN_SOURCE_PATH = re.compile(
     r"(^|/)(node_modules(/|$)|(?:\.git|\.hg|\.svn|\.bzr)(/|$)|"
     r"\.env(?:$|\.(?!(?:example|sample|template|dist)$)[^/]+$)|"
-    r"id_rsa|id_ed25519|.*\.(pem|p12)|"
+    r"id_rsa|id_ed25519|.*\.(pem|p12|pfx)|"
     r"(?:private|secret|server|client|tls|ssl)[^/]*\.key$|"
     r"cookies?\.json$|client_secret[^/]*\.json$|\.npmrc$|\.yarnrc(?:\.yml)?$|"
     r"\.pypirc$|\.netrc$|pip\.conf$|"
