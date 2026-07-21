@@ -452,7 +452,7 @@ test('renders inline Markdown in the scoped document heading, not raw source', a
     return route.fulfill({ status: 404, json: { error: 'Not found' } });
   });
 
-  await page.goto('/');
+  await page.goto('/app');
   // The `#` heading renders at its authored level (h1), not a forced h2.
   const heading = page.locator('.doc-sheet h1').first();
   // The heading must render Markdown: inline code becomes <code>, the link an <a>.
@@ -486,7 +486,7 @@ test('preserves the authored heading level of a scoped document block', async ({
     return route.fulfill({ status: 404, json: { error: 'Not found' } });
   });
 
-  await page.goto('/');
+  await page.goto('/app');
   // Wait for the server tree to replace the initial mock render, then assert the
   // scope heading renders at its authored level (h3), not rewritten to a forced h2.
   // Scope to the doc sheet so it can't bind to the context rail's own <h3> title.
@@ -510,7 +510,7 @@ test('renders inline Markdown in a task block title, not raw source', async ({ p
     return route.fulfill({ status: 404, json: { error: 'Not found' } });
   });
 
-  await page.goto('/');
+  await page.goto('/app');
   const title = page.locator('.task-line').first();
   // The projected title must render Markdown: inline code becomes <code>, the link an <a>.
   await expect(title.locator('code')).toHaveText('dryvre');
@@ -544,7 +544,7 @@ test('resolves a reference-style link in a heading whose definition lives in the
     return route.fulfill({ status: 404, json: { error: 'Not found' } });
   });
 
-  await page.goto('/');
+  await page.goto('/app');
   const heading = page.locator('.doc-sheet h1').first();
   // The reference-style link must resolve to an <a>, not leak the raw `[spec][s]` source.
   await expect(heading.getByRole('link', { name: 'spec' })).toHaveAttribute('href', 'https://example.com');
@@ -575,7 +575,7 @@ test('resolves a multiline reference definition in a heading link', async ({ pag
     return route.fulfill({ status: 404, json: { error: 'Not found' } });
   });
 
-  await page.goto('/');
+  await page.goto('/app');
   const heading = page.locator('.doc-sheet h1').first();
   await expect(heading.getByRole('link', { name: 'spec' })).toHaveAttribute('href', 'https://example.com');
   await expect(heading).not.toContainText('][');
