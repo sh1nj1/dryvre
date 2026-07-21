@@ -56,7 +56,7 @@ export function Sidebar({ blocks, rootId, selectedId, visibleIds, mobileOpen, on
     <div className={`mobile-backdrop ${mobileOpen ? 'show' : ''}`} onClick={onClose} />
     <aside className={`sidebar ${mobileOpen ? 'mobile-open' : ''}`}>
       <div className="side-tools"><button className="search-trigger" onClick={onOpenSearch}><span>⌕</span><span>Search &amp; filter</span><kbd>⌘K</kbd></button><button className="icon-btn" aria-label="Create block">＋</button></div>
-      <nav className="tree-wrap" aria-label="Block tree"><div className="section-label"><span>Tree</span><span aria-hidden="true">•••</span></div>{root && renderNode(root, 0)}</nav>
+      <nav className="tree-wrap" aria-label="Block tree"><div className="section-label"><span>Tree</span></div>{root && renderNode(root, 0)}</nav>
     </aside>
   </>;
 }
@@ -127,10 +127,10 @@ export function BoardView({ blocks, messages, selectedId, onSelect, onStatus }: 
   })}</div>;
 }
 
-export function StreamView({ selected, path, messages, onSend, onOpenDocument }: { selected: DryvreBlock; path: DryvreBlock[]; messages: BlockMessage[]; onSend: (body: string) => void; onOpenDocument: () => void }) {
+export function StreamView({ selected, messages, onSend }: { selected: DryvreBlock; messages: BlockMessage[]; onSend: (body: string) => void }) {
   const [value, setValue] = useState('');
   const send = () => { if (!value.trim()) return; onSend(value.trim()); setValue(''); };
-  return <div className="stream-layout"><div className="stream-focus"><div className="focus-glyph">◎</div><div className="focus-copy"><span>Conversation attached to</span><strong>{path.map((block) => block.title).join(' / ')}</strong></div><button className="tool-pill" onClick={onOpenDocument}>Open block ↗</button></div>
+  return <div className="stream-layout">
     {messages.length ? messages.map((message) => <article className={`message ${message.agent ? 'agent' : ''}`} key={message.id}><div className="avatar">{message.initials}</div><div><div className="message-head"><strong>{message.author}</strong><span>{message.timeLabel}</span></div><div className="message-body"><p>{message.body}</p>{message.createdBlocks && <div className="agent-output">{message.createdBlocks.map((body) => <div className="agent-block" key={body}>{body}</div>)}</div>}</div><div className="message-actions">Reply · Reference · •••</div></div></article>) : <div className="empty-stream"><strong>No messages yet</strong><span>Start a conversation in this block.</span></div>}
     <div className="composer"><textarea value={value} onChange={(event) => setValue(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) send(); }} placeholder="Write to this block… Use @ to mention people, agents, or blocks" /><div className="composer-actions"><span className="context-chip">◎ {selected.title}</span><button className="tool-pill">@ Reference</button><button className="send-btn" aria-label="Send message" disabled={!value.trim()} onClick={send}>↑</button></div></div>
   </div>;

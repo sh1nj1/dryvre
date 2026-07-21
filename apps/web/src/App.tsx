@@ -91,7 +91,7 @@ export default function App() {
     <main><ViewHeader title={scope.title} view={view} onView={setView} /><div className="canvas">
       {view === 'document' && <DocumentView scopeId={scope.id} selectedId={selected.id} editingId={editingId} blocks={snapshot.blocks} references={snapshot.references} onSelect={setSelectedId} onEditStart={setEditingId} onEditEnd={(id) => setEditingId((current) => current === id ? null : current)} onEdit={editBlock} onCreateAfter={createBlockAfter} onDelete={deleteBlock} onStatus={(id, status) => void setStatus(id, status)} />}
       {view === 'board' && <BoardView blocks={scopeBlocks} messages={snapshot.messages} selectedId={selected.id} onSelect={setSelectedId} onStatus={(id, status) => void setStatus(id, status)} />}
-      {view === 'stream' && <StreamView selected={selected} path={selectedScopePath.slice(1)} messages={selectedMessages} onSend={(body) => void sendMessage(body)} onOpenDocument={() => setView('document')} />}
+      {view === 'stream' && <StreamView selected={selected} messages={selectedMessages} onSend={(body) => void sendMessage(body)} />}
     </div></main>
     <ContextRail selected={selected} path={selectedScopePath} blocks={snapshot.blocks} references={snapshot.references} messages={selectedMessages} onOpenStream={() => setView('stream')} />
     <SearchDialog open={searchOpen} blocks={snapshot.blocks} scopePath={scopePath} onClose={closeSearch} onApply={(filters) => void applySearch(filters)} />
