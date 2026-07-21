@@ -130,6 +130,15 @@ export function validateFixtures(fixtures) {
   for (const field of ["localStorage", "sessionStorage"]) {
     if (hasValue(fixtures, field) && !isObject(fixtures[field]))
       fail(`fixtures.${field}`, "must be an object");
+    for (const [key, value] of Object.entries(fixtures[field] ?? {})) {
+      const primitive = ["string", "number", "boolean"].includes(typeof value);
+      if (!primitive || (typeof value === "number" && !Number.isFinite(value))) {
+        fail(
+          `fixtures.${field}.${key}`,
+          "must be a string, finite number, or boolean",
+        );
+      }
+    }
   }
   if (hasValue(fixtures, "cookies") && !Array.isArray(fixtures.cookies)) {
     fail("fixtures.cookies", "must be an array");

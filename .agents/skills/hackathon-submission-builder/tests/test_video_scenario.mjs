@@ -120,3 +120,19 @@ test("validates fixture routes without coercion or ambiguous bodies", () => {
     null,
   );
 });
+
+test("rejects structured storage values instead of coercing them", () => {
+  for (const value of [{ seeded: true }, ["seeded"], null, Number.NaN]) {
+    assert.throws(
+      () => validateFixtures({ localStorage: { demo: value } }),
+      /must be a string, finite number, or boolean/,
+    );
+  }
+  assert.deepEqual(
+    validateFixtures({
+      localStorage: { mode: "fixture", count: 2, enabled: true },
+      sessionStorage: { ready: false },
+    }).localStorage,
+    { mode: "fixture", count: 2, enabled: true },
+  );
+});

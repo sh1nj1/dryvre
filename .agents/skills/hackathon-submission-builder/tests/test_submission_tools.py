@@ -235,6 +235,25 @@ class PackagerTests(unittest.TestCase):
 
 
 class ValidatorTests(unittest.TestCase):
+    def test_validator_rejects_manifest_symlink_before_reading(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary) / "submission"
+            root.mkdir()
+            outside = Path(temporary) / "outside.json"
+            outside.write_text("not a submission manifest", encoding="utf-8")
+            (root / "manifest.json").symlink_to(outside)
+
+            result = validator.validate_submission(root)
+
+            self.assertFalse(result["valid"])
+            self.assertEqual(result["filesChecked"], 0)
+            self.assertTrue(
+                any(
+                    "manifest.json cannot be a symbolic link" in error
+                    for error in result["errors"]
+                )
+            )
+
     def test_zip_and_tar_share_member_path_policy(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

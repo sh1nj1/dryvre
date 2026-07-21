@@ -329,6 +329,13 @@ def validate_submission(root: Path, max_video_seconds: float | None = None) -> d
             "filesChecked": 0,
         }
     manifest_path = root / "manifest.json"
+    if manifest_path.is_symlink():
+        return {
+            "valid": False,
+            "errors": [f"manifest.json cannot be a symbolic link: {manifest_path}"],
+            "warnings": [],
+            "filesChecked": 0,
+        }
     if not manifest_path.exists():
         raise ValueError("manifest.json is missing")
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
