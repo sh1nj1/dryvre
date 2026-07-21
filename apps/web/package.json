@@ -12,6 +12,7 @@
     "@dryvre/shared": "*",
     "@vitejs/plugin-react": "latest",
     "vite": "latest",
+    "mdast-util-from-markdown": "^2.0.3",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
     "react-markdown": "^10.1.0"

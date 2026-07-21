@@ -428,3 +428,155 @@ test('keeps the mode picker selectable during an in-flight run on a valid target
   // The in-flight run stays observable and cancellable throughout.
   await expect(page.getByRole('button', { name: 'Cancel' })).toBeVisible();
 });
+
+test('renders inline Markdown in the scoped document heading, not raw source', async ({ page }) => {
+  const rootId = '00000000-0000-4000-8000-000000000010';
+  const authorId = '00000000-0000-4000-8000-000000000001';
+  const root = {
+    id: rootId,
+    parentId: null,
+    path: `/${rootId}/`,
+    rank: 'a',
+    // A heading whose text carries inline Markdown: inline code and a link.
+    bodyMd: '# Deploy to `fly.io` and the [spec](https://example.com)\n\nShip when the checks are green.',
+    status: null,
+    authorId,
+    version: 0,
+    createdAt: '2026-07-22T00:00:00.000Z',
+    updatedAt: '2026-07-22T00:00:00.000Z',
+  };
+
+  await page.route('**/api/**', async (route) => {
+    const url = new URL(route.request().url());
+    if (url.pathname === `/api/trees/${rootId}`) return route.fulfill({ json: { blocks: [root] } });
+    return route.fulfill({ status: 404, json: { error: 'Not found' } });
+  });
+
+  await page.goto('/app');
+  // The `#` heading renders at its authored level (h1), not a forced h2.
+  const heading = page.locator('.doc-sheet h1').first();
+  // The heading must render Markdown: inline code becomes <code>, the link an <a>.
+  await expect(heading.locator('code')).toHaveText('fly.io');
+  await expect(heading.getByRole('link', { name: 'spec' })).toHaveAttribute('href', 'https://example.com');
+  // And it must NOT leak the raw backtick/bracket source.
+  await expect(heading).not.toContainText('`');
+  await expect(heading).not.toContainText('](');
+});
+
+test('preserves the authored heading level of a scoped document block', async ({ page }) => {
+  const rootId = '00000000-0000-4000-8000-000000000010';
+  const authorId = '00000000-0000-4000-8000-000000000001';
+  // A level-3 heading must render as <h3>, not be rewritten to <h2>.
+  const root = {
+    id: rootId,
+    parentId: null,
+    path: `/${rootId}/`,
+    rank: 'a',
+    bodyMd: '### Deep section\n\nBody copy.',
+    status: null,
+    authorId,
+    version: 0,
+    createdAt: '2026-07-22T00:00:00.000Z',
+    updatedAt: '2026-07-22T00:00:00.000Z',
+  };
+
+  await page.route('**/api/**', async (route) => {
+    const url = new URL(route.request().url());
+    if (url.pathname === `/api/trees/${rootId}`) return route.fulfill({ json: { blocks: [root] } });
+    return route.fulfill({ status: 404, json: { error: 'Not found' } });
+  });
+
+  await page.goto('/app');
+  // Wait for the server tree to replace the initial mock render, then assert the
+  // scope heading renders at its authored level (h3), not rewritten to a forced h2.
+  // Scope to the doc sheet so it can't bind to the context rail's own <h3> title.
+  const sheet = page.locator('.doc-sheet').first();
+  await expect(sheet.getByRole('heading', { level: 3, name: 'Deep section' })).toBeVisible();
+  await expect(sheet.locator('h2')).toHaveCount(0);
+});
+
+test('renders inline Markdown in a task block title, not raw source', async ({ page }) => {
+  const rootId = '00000000-0000-4000-8000-000000000010';
+  const authorId = '00000000-0000-4000-8000-000000000001';
+  const base = { status: null, authorId, version: 0, createdAt: '2026-07-22T00:00:00.000Z', updatedAt: '2026-07-22T00:00:00.000Z' };
+  const root = { ...base, id: rootId, parentId: null, path: `/${rootId}/`, rank: 'a', bodyMd: '# Tasks' };
+  const taskId = '00000000-0000-4000-8000-000000000011';
+  // A task heading whose text carries inline Markdown: inline code and a link.
+  const task = { ...base, id: taskId, parentId: rootId, path: `/${rootId}/${taskId}/`, rank: 'b', status: 'todo', bodyMd: '# Ship `dryvre` for the [demo](https://example.com)\n\nDo it before the deadline.' };
+
+  await page.route('**/api/**', async (route) => {
+    const url = new URL(route.request().url());
+    if (url.pathname === `/api/trees/${rootId}`) return route.fulfill({ json: { blocks: [root, task] } });
+    return route.fulfill({ status: 404, json: { error: 'Not found' } });
+  });
+
+  await page.goto('/app');
+  const title = page.locator('.task-line').first();
+  // The projected title must render Markdown: inline code becomes <code>, the link an <a>.
+  await expect(title.locator('code')).toHaveText('dryvre');
+  await expect(title.getByRole('link', { name: 'demo' })).toHaveAttribute('href', 'https://example.com');
+  // And it must NOT leak the raw backtick/bracket source.
+  await expect(title).not.toContainText('`');
+  await expect(title).not.toContainText('](');
+});
+
+test('resolves a reference-style link in a heading whose definition lives in the body', async ({ page }) => {
+  const rootId = '00000000-0000-4000-8000-000000000010';
+  const authorId = '00000000-0000-4000-8000-000000000001';
+  // A reference-style link in the heading; its definition lives later in the body.
+  // The heading is projected in isolation, so the definition must ride along.
+  const root = {
+    id: rootId,
+    parentId: null,
+    path: `/${rootId}/`,
+    rank: 'a',
+    bodyMd: '# See the [spec][s]\n\nShip when green.\n\n[s]: https://example.com',
+    status: null,
+    authorId,
+    version: 0,
+    createdAt: '2026-07-22T00:00:00.000Z',
+    updatedAt: '2026-07-22T00:00:00.000Z',
+  };
+
+  await page.route('**/api/**', async (route) => {
+    const url = new URL(route.request().url());
+    if (url.pathname === `/api/trees/${rootId}`) return route.fulfill({ json: { blocks: [root] } });
+    return route.fulfill({ status: 404, json: { error: 'Not found' } });
+  });
+
+  await page.goto('/app');
+  const heading = page.locator('.doc-sheet h1').first();
+  // The reference-style link must resolve to an <a>, not leak the raw `[spec][s]` source.
+  await expect(heading.getByRole('link', { name: 'spec' })).toHaveAttribute('href', 'https://example.com');
+  await expect(heading).not.toContainText('][');
+});
+
+test('resolves a multiline reference definition in a heading link', async ({ page }) => {
+  const rootId = '00000000-0000-4000-8000-000000000010';
+  const authorId = '00000000-0000-4000-8000-000000000001';
+  // CommonMark allows the destination on a line after the colon; the isolated
+  // heading projection must carry this multiline definition along verbatim.
+  const root = {
+    id: rootId,
+    parentId: null,
+    path: `/${rootId}/`,
+    rank: 'a',
+    bodyMd: '# See the [spec][s]\n\nShip when green.\n\n[s]:\n  https://example.com',
+    status: null,
+    authorId,
+    version: 0,
+    createdAt: '2026-07-22T00:00:00.000Z',
+    updatedAt: '2026-07-22T00:00:00.000Z',
+  };
+
+  await page.route('**/api/**', async (route) => {
+    const url = new URL(route.request().url());
+    if (url.pathname === `/api/trees/${rootId}`) return route.fulfill({ json: { blocks: [root] } });
+    return route.fulfill({ status: 404, json: { error: 'Not found' } });
+  });
+
+  await page.goto('/app');
+  const heading = page.locator('.doc-sheet h1').first();
+  await expect(heading.getByRole('link', { name: 'spec' })).toHaveAttribute('href', 'https://example.com');
+  await expect(heading).not.toContainText('][');
+});
