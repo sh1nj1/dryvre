@@ -133,9 +133,23 @@ export function createAgentEventRuntime(
     return waitForRun(agentRuntime, run.id, () => closed);
   }
 
+  // A drafted task is rankful (canonical); its parent must also be canonical or the
+  // task is unreachable from the document and board projections that walk rankful
+  // blocks. When @PM Agent is invoked from a reply, source.parentId is a rankless
+  // stream message, so climb to the nearest canonical ancestor before drafting.
+  async function nearestCanonicalParentId(startId: string) {
+    let current = await db.query.blocks.findFirst({ where: eq(blocks.id, startId) });
+    while (current && current.rank === null && current.parentId) {
+      current = await db.query.blocks.findFirst({ where: eq(blocks.id, current.parentId) });
+    }
+    return current && current.rank !== null ? current.id : null;
+  }
+
   async function createDraftTask(definition: TriggerDefinition, source: typeof blocks.$inferSelect, requestedBy: string) {
     if (!source.parentId) throw new Error('A task-drafting message needs a parent block');
-    const completed = await runAgent(definition, source.parentId, source.bodyMd, requestedBy);
+    const canonicalParentId = await nearestCanonicalParentId(source.parentId);
+    if (!canonicalParentId) throw new Error('A drafted task needs a canonical ancestor block');
+    const completed = await runAgent(definition, canonicalParentId, source.bodyMd, requestedBy);
     if (completed?.status !== 'succeeded') throw new Error(completed?.errorCode ?? 'pm_agent_failed');
     const authorId = await agentRuntime.subjectFor(definition.agentBlockId);
     const result = await applyOperation(db, {
@@ -143,7 +157,7 @@ export function createAgentEventRuntime(
       op: {
         type: 'create',
         id: randomUUID(),
-        parentId: source.parentId,
+        parentId: canonicalParentId,
         bodyMd: [
           '## Publish and verify the Dryvre launch demo',
           '',
