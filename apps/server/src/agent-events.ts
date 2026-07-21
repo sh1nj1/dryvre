@@ -1,9 +1,10 @@
 import { randomUUID } from 'node:crypto';
-import { and, eq, like } from 'drizzle-orm';
+import { and, eq, inArray, like } from 'drizzle-orm';
 import {
   agentLoops,
   agentTriggerDeliveries,
   blocks,
+  refs,
   subjectInboxes,
   subjects,
   type DryvreDatabase,
@@ -162,7 +163,11 @@ export function createAgentEventRuntime(
 
   async function beginTaskLoop(definition: TriggerDefinition, task: typeof blocks.$inferSelect, requestedBy: string) {
     const descendants = await db.select().from(blocks).where(like(blocks.path, `${task.path}%`));
-    const context = descendants.map((block) => block.bodyMd).join('\n\n');
+    const references = await db.select({ toBlockId: refs.toBlockId }).from(refs).where(eq(refs.fromBlockId, task.id));
+    const referencedBlocks = references.length
+      ? await db.select().from(blocks).where(inArray(blocks.id, references.map((reference) => reference.toBlockId)))
+      : [];
+    const context = [...descendants, ...referencedBlocks].map((block) => block.bodyMd).join('\n\n');
     const agentAuthorId = await agentRuntime.subjectFor(definition.agentBlockId);
     if (!contractNeedsInput(context)) {
       const [loop] = await db.insert(agentLoops).values({

@@ -143,9 +143,10 @@ export function StreamView({ selected, messages, focusedMessageId, agents, agent
   const focusedMessage = useRef<HTMLElement>(null);
   const [replyParentId, setReplyParentId] = useState<string>();
   useEffect(() => { focusedMessage.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }); }, [focusedMessageId, messages]);
+  useEffect(() => { setReplyParentId(undefined); }, [selected.id]);
   return <div className="stream-layout">
     {messages.length ? messages.map((message) => <article ref={message.id === focusedMessageId ? focusedMessage : undefined} className={`message ${message.agent ? 'agent' : ''} ${message.id === focusedMessageId ? 'result-focus' : ''}`} key={message.id}><div className="avatar">{message.initials}</div><div><div className="message-head"><strong>{message.author}</strong><span>{message.timeLabel}</span></div><div className="message-body"><p>{message.body}</p>{message.createdBlocks && <div className="agent-output">{message.createdBlocks.map((body) => <div className="agent-block" key={body}>{body}</div>)}</div>}</div><div className="message-actions"><button onClick={() => setReplyParentId(message.id)}>Reply</button><span> · Reference · •••</span></div></div></article>) : <div className="empty-stream"><strong>No messages yet</strong><span>Start a conversation in this block.</span></div>}
-    <StreamComposer selected={selected} agents={agents} target={agentTarget} live={live} liveMessage={liveMessage} replyParentId={replyParentId ?? ''} onSend={(body, parentId) => onSend(body, parentId || undefined)} onSent={onAgentSent} />
+    <StreamComposer selected={selected} agents={agents} target={agentTarget} live={live} liveMessage={liveMessage} replyParentId={replyParentId ?? ''} onSend={(body, parentId) => { onSend(body, parentId || undefined); setReplyParentId(undefined); }} onSent={onAgentSent} />
   </div>;
 }
 
