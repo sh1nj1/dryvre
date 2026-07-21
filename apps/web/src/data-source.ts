@@ -1,5 +1,6 @@
 import { initialSnapshot } from './mock-data';
 import type { BlockMessage, DryvreDataSource, DryvreSnapshot, SearchFilters, TaskStatus } from './model';
+import { moveMockBlock } from './block-drag';
 
 function copySnapshot(snapshot: DryvreSnapshot): DryvreSnapshot {
   return {
@@ -73,6 +74,10 @@ export class MockDryvreDataSource implements DryvreDataSource {
     this.snapshot.blocks = this.snapshot.blocks.filter((block) => !removed.has(block.id));
     this.snapshot.messages = this.snapshot.messages.filter((message) => !removed.has(message.parentId));
     this.snapshot.references = this.snapshot.references.filter((reference) => !removed.has(reference.fromId) && !removed.has(reference.toId));
+  }
+
+  async moveBlock(blockId: string, parentId: string | null, afterId: string | null) {
+    this.snapshot.blocks = moveMockBlock(this.snapshot.blocks, blockId, { parentId, afterId });
   }
 
   async search(filters: SearchFilters) {

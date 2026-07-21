@@ -80,7 +80,7 @@ session(id, subject_id, expires_at)
 
 ```text
 create(parent, after?, body)
-move(id, parent, rank?)
+move(id, parent, after? | rank?)
 edit(id, body)
 setStatus(id, status?)
 ref(from, to)
@@ -89,7 +89,7 @@ delete(id)
 ```
 
 - `create`는 정본 위치 또는 스트림 tail에 블록을 만든다.
-- `move` 하나가 부모 변경, 순서 변경과 문서·스트림 간 이동을 담당한다.
+- `move` 하나가 부모 변경, 순서 변경과 문서·스트림 간 이동을 담당한다. UI는 안정적인 재정렬을 위해 새 부모의 `after` 형제를 보내고 서버가 정본 `rank`를 다시 계산할 수 있다.
 - `edit`는 `body_md`만 변경한다.
 - `setStatus(null)`은 블록의 태스크성을 제거한다.
 - 승인된 연산과 상태 변경은 같은 트랜잭션에서 처리하고 `op_log`에 append한다.

@@ -59,6 +59,7 @@ export interface DryvreDataSource {
   editBlock(blockId: string, bodyMd: string, version: number): Promise<DryvreBlock>;
   createBlockAfter(blockId: string, bodyMd: string): Promise<DryvreBlock>;
   deleteBlock(blockId: string): Promise<void>;
+  moveBlock(blockId: string, parentId: string | null, afterId: string | null): Promise<void>;
 }
 
 // A Markdown ATX heading, per CommonMark: up to 3 leading spaces (4+ is an

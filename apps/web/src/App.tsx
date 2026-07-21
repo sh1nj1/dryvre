@@ -7,6 +7,7 @@ import type { DryvreSnapshot, SearchFilters, TaskStatus, ViewMode } from './mode
 import { blockPath, descendantsOf } from './model';
 import { ROOT_ID } from './use-tree';
 import { PanelResizer, usePanelLayout } from './panel-layout';
+import { moveMockBlock, planBlockMove, type TreeDropPosition } from './block-drag';
 import './styles.css';
 
 const HUMAN_ID = '00000000-0000-4000-8000-000000000001';
@@ -65,6 +66,7 @@ export default function App() {
   const [focusedMessageId, setFocusedMessageId] = useState<string>();
   const [liveOnline, setLiveOnline] = useState(false);
   const [liveMessage, setLiveMessage] = useState<WsServerMessage>();
+  const [draggedBlockId, setDraggedBlockId] = useState<string | null>(null);
   const [inboxId, setInboxId] = useState<string>();
   const panelLayout = usePanelLayout(view);
 
@@ -155,11 +157,26 @@ export default function App() {
       const block = serverBlocks.find((item) => item.id === id);
       if (!block) return;
       await api.apply({ type: 'setStatus', id, status, version: block.version });
-      await refreshServerTree(id);
+      await syncServerTree();
+      setSelectedId(id);
       return;
     }
     await dryvreDataSource.setStatus(id, status);
     setSnapshot((current) => current && ({ ...current, blocks: current.blocks.map((block) => block.id === id ? { ...block, status } : block) }));
+  };
+  const moveBlock = async (id: string, targetId: string, position: TreeDropPosition) => {
+    const move = planBlockMove(id, targetId, position, snapshot.blocks, snapshot.rootId);
+    if (!move) return;
+    if (serverBacked) {
+      const block = serverBlocks.find((item) => item.id === id);
+      if (!block) return;
+      await api.apply({ type: 'move', id, parentId: move.parentId, afterId: move.afterId, version: block.version });
+      await syncServerTree();
+    } else {
+      await dryvreDataSource.moveBlock(id, move.parentId, move.afterId);
+      setSnapshot((current) => current && ({ ...current, blocks: moveMockBlock(current.blocks.map((block) => ({ ...block })), id, move) }));
+    }
+    setSelectedId(id);
   };
   const sendMessage = async (body: string, parentId = selected.id) => {
     if (serverBacked) {
@@ -167,7 +184,7 @@ export default function App() {
       await syncServerTree();
       return;
     }
-    const message = await dryvreDataSource.createMessage(selected.id, body);
+    const message = await dryvreDataSource.createMessage(parentId, body);
     setSnapshot((current) => current && ({ ...current, messages: [...current.messages, message] }));
   };
   const applySearch = async (filters: SearchFilters) => {
@@ -235,10 +252,10 @@ export default function App() {
 
   return <div className="app-shell" style={{ '--sidebar': `${panelLayout.left}px`, '--context': `${panelLayout.right}px` } as CSSProperties}>
     <Topbar path={scopePath} view={view} mobileTreeOpen={mobileTreeOpen} showInbox={Boolean(inboxId && byId.has(inboxId))} inboxActive={scope.id === inboxId} onView={setView} onToggleMobileTree={() => setMobileTreeOpen((open) => !open)} onOpenInbox={openInbox} />
-    <Sidebar blocks={snapshot.blocks} rootId={snapshot.rootId} inboxId={inboxId} selectedId={scope.id} visibleIds={visibleIds} mobileOpen={mobileTreeOpen} onSelect={selectFromTree} onOpenSearch={() => setSearchOpen(true)} onClose={() => setMobileTreeOpen(false)} />
+    <Sidebar blocks={snapshot.blocks} rootId={snapshot.rootId} inboxId={inboxId} selectedId={scope.id} visibleIds={visibleIds} mobileOpen={mobileTreeOpen} onSelect={selectFromTree} onOpenSearch={() => setSearchOpen(true)} onClose={() => setMobileTreeOpen(false)} onDragStart={setDraggedBlockId} onDragEnd={() => setDraggedBlockId(null)} />
     <main className={view === 'stream' ? 'workspace workspace-hidden' : 'workspace'}><div className="canvas">
-      {view === 'document' && <DocumentView scopeId={scope.id} selectedId={selected.id} editingId={editingId} blocks={snapshot.blocks} references={snapshot.references} onSelect={setSelectedId} onEditStart={setEditingId} onEditEnd={(id) => setEditingId((current) => current === id ? null : current)} onEdit={editBlock} onCreateAfter={createBlockAfter} onDelete={deleteBlock} onStatus={(id, status) => void setStatus(id, status)} />}
-      {view === 'board' && <BoardView blocks={scopeBlocks} messages={snapshot.messages} selectedId={selected.id} onSelect={setSelectedId} onStatus={(id, status) => void setStatus(id, status)} />}
+      {view === 'document' && <DocumentView scopeId={scope.id} selectedId={selected.id} editingId={editingId} blocks={snapshot.blocks} references={snapshot.references} draggedBlockId={draggedBlockId} onSelect={setSelectedId} onEditStart={setEditingId} onEditEnd={(id) => setEditingId((current) => current === id ? null : current)} onEdit={editBlock} onCreateAfter={createBlockAfter} onDelete={deleteBlock} onStatus={(id, status) => void setStatus(id, status)} onDragStart={setDraggedBlockId} onDragEnd={() => setDraggedBlockId(null)} onMove={(id, targetId, position) => void moveBlock(id, targetId, position)} />}
+      {view === 'board' && <BoardView blocks={scopeBlocks} messages={snapshot.messages} selectedId={selected.id} draggedBlockId={draggedBlockId} onSelect={setSelectedId} onStatus={(id, status) => void setStatus(id, status)} onDragStart={setDraggedBlockId} onDragEnd={() => setDraggedBlockId(null)} />}
     </div></main>
     {/* Move one mounted Stream between the work surface and companion rail so Agent observers survive view switches. */}
     <section className={`stream-host ${view === 'stream' ? 'stream-host-main' : 'stream-host-rail'}`} aria-label={`Stream for ${selected.title}`}>
