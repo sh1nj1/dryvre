@@ -53,6 +53,13 @@ export function isAffirmativeApproval(body: string) {
   return affirmative.test(body) && !negative.test(body);
 }
 
+export function contractNeedsInput(context: string) {
+  const required = ['Deliverable:', 'Completion criteria:', 'Constraints:', 'Verification:', '@Developer Agent'];
+  const approvalField = context.match(/\*\*Public URL approval:\*\*\s*([^\n]+)/i)?.[1] ?? '';
+  const unresolvedApproval = Boolean(approvalField) && !isAffirmativeApproval(context);
+  return unresolvedApproval || required.some((field) => !context.includes(field));
+}
+
 export function collectAgentTriggers(allBlocks: Block[]) {
   const definitions: TriggerDefinition[] = [];
   for (const agent of allBlocks.filter((block) => parseBlockDirective(block.bodyMd)?.kind === 'agent')) {
@@ -154,20 +161,17 @@ export function createAgentEventRuntime(
     emit(result);
   }
 
-  function contractNeedsInput(context: string) {
-    const required = ['Deliverable:', 'Completion criteria:', 'Constraints:', 'Verification:', '@Developer Agent'];
-    const approvalField = context.match(/\*\*Public URL approval:\*\*\s*([^\n]+)/i)?.[1] ?? '';
-    const unresolvedApproval = Boolean(approvalField) && !isAffirmativeApproval(context);
-    return unresolvedApproval || required.some((field) => !context.includes(field));
-  }
-
-  async function beginTaskLoop(definition: TriggerDefinition, task: typeof blocks.$inferSelect, requestedBy: string) {
+  async function taskContext(task: typeof blocks.$inferSelect, ...extra: string[]) {
     const descendants = await db.select().from(blocks).where(like(blocks.path, `${task.path}%`));
     const references = await db.select({ toBlockId: refs.toBlockId }).from(refs).where(eq(refs.fromBlockId, task.id));
     const referencedBlocks = references.length
       ? await db.select().from(blocks).where(inArray(blocks.id, references.map((reference) => reference.toBlockId)))
       : [];
-    const context = [...descendants, ...referencedBlocks].map((block) => block.bodyMd).join('\n\n');
+    return [...descendants, ...referencedBlocks].map((block) => block.bodyMd).concat(extra).join('\n\n');
+  }
+
+  async function beginTaskLoop(definition: TriggerDefinition, task: typeof blocks.$inferSelect, requestedBy: string) {
+    const context = await taskContext(task);
     const agentAuthorId = await agentRuntime.subjectFor(definition.agentBlockId);
     if (!contractNeedsInput(context)) {
       const [loop] = await db.insert(agentLoops).values({
@@ -318,6 +322,11 @@ export function createAgentEventRuntime(
       if (/^## Approval required\b/i.test(request?.bodyMd ?? '') && !isAffirmativeApproval(source.bodyMd)) continue;
       const task = await db.query.blocks.findFirst({ where: eq(blocks.id, loop.taskBlockId) });
       if (!task || task.status !== 'blocked') continue;
+      // A satisfied approval must not resume a task whose contract is still
+      // incomplete: revalidate the ref-aware context (including this reply)
+      // so an under-specified task cannot be claimed and marked done. Leave it
+      // blocked instead; collecting each missing field is out of Lite scope.
+      if (contractNeedsInput(await taskContext(task, `## Approval response\n\n${source.bodyMd}`))) continue;
       const agentAuthorId = await agentRuntime.subjectFor(loop.agentBlockId);
       const emissions = await db.transaction(async (tx) => {
         const approvalEvidence = await applyOperationInTransaction(tx, {

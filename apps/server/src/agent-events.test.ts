@@ -1,6 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import type { Block } from '@dryvre/shared';
-import { collectAgentTriggers, isAffirmativeApproval } from './agent-events.js';
+import { collectAgentTriggers, contractNeedsInput, isAffirmativeApproval } from './agent-events.js';
+
+const completeContract = [
+  'Deliverable: Ship the demo',
+  'Completion criteria: Scenario passes',
+  'Constraints: Stay in scope',
+  'Verification: Run the e2e suite',
+  '@Developer Agent',
+  '**Public URL approval:** TBD',
+].join('\n');
 
 const block = (overrides: Partial<Block>): Block => ({
   id: crypto.randomUUID(),
@@ -21,6 +30,21 @@ describe('Agent event safety', () => {
     expect(isAffirmativeApproval('Approved. Publish the URL publicly.')).toBe(true);
     expect(isAffirmativeApproval('No, do not publish the URL.')).toBe(false);
     expect(isAffirmativeApproval('I have a question first.')).toBe(false);
+  });
+
+  it('keeps blocking when an affirmative approval leaves other contract fields missing', () => {
+    // Approval satisfied, but the required Verification section is absent.
+    const missingVerification = completeContract
+      .replace('Verification: Run the e2e suite\n', '')
+      .concat('\n## Approval response\n\nApproved. Publish it publicly.');
+    expect(isAffirmativeApproval(missingVerification)).toBe(true);
+    expect(contractNeedsInput(missingVerification)).toBe(true);
+  });
+
+  it('clears input once approval is affirmative and every field is present', () => {
+    const answered = `${completeContract}\n## Approval response\n\nApproved. Publish it publicly.`;
+    expect(contractNeedsInput(completeContract)).toBe(true);
+    expect(contractNeedsInput(answered)).toBe(false);
   });
 
   it('isolates malformed trigger blocks while keeping valid subscriptions', () => {

@@ -124,7 +124,11 @@ export default function App() {
   const selectedPath = blockPath(selected.id, snapshot.blocks);
   const selectedScopePath = selectedPath.slice(Math.max(0, selectedPath.findIndex((block) => block.id === scope.id)));
   const scopeBlocks = [scope, ...descendantsOf(scope.id, snapshot.blocks)];
-  const selectedMessages = snapshot.messages.filter((message) => message.parentId === selected.id);
+  // A block's stream is its direct child messages plus their depth-1 replies,
+  // so an answer typed under an Inbox approval request (a grandchild of the
+  // Inbox) stays visible instead of vanishing after the refresh.
+  const directMessageIds = new Set(snapshot.messages.filter((message) => message.parentId === selected.id).map((message) => message.id));
+  const selectedMessages = snapshot.messages.filter((message) => message.parentId === selected.id || (message.parentId !== null && directMessageIds.has(message.parentId)));
   const agents = serverBlocks.filter((block) => parseBlockDirective(block.bodyMd)?.kind === 'agent');
   const agentTargets = serverBlocks.filter((block) => {
     const directive = parseBlockDirective(block.bodyMd);
