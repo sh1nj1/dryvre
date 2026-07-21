@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { and, asc, eq, like, or, sql } from 'drizzle-orm';
 import { blocks, opLog, refs, type DryvreDatabase } from '@dryvre/db';
-import type { Block, BlockOp, OpEnvelope } from '@dryvre/shared';
+import { sortBlocksInDocumentOrder, type Block, type BlockOp, type OpEnvelope } from '@dryvre/shared';
 
 export type DryvreTransaction = Parameters<Parameters<DryvreDatabase['transaction']>[0]>[0];
 
@@ -27,8 +27,8 @@ export async function getSubtree(db: DryvreDatabase, rootId: string, query?: str
   const rows = await db.select().from(blocks).where(and(
     like(blocks.path, `${root.path}%`),
     search ? sql`to_tsvector('simple', ${blocks.bodyMd}) @@ plainto_tsquery('simple', ${search})` : undefined,
-  )).orderBy(asc(blocks.path), sql`${blocks.rank} asc nulls last`, asc(blocks.createdAt));
-  return rows.map(serializeBlock);
+  ));
+  return sortBlocksInDocumentOrder(rows.map(serializeBlock));
 }
 
 async function assertVersion(tx: DryvreTransaction, id: string, version?: number) {
