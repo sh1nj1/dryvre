@@ -278,6 +278,26 @@ export function stopCodexProcess(child: ChildProcessWithoutNullStreams) {
   }, 3_000).unref();
 }
 
+export function killCodexProcessGroup(
+  pid: number,
+  signal: NodeJS.Signals = "SIGKILL",
+  kill: (target: number, signal: NodeJS.Signals) => boolean = process.kill,
+) {
+  if (!Number.isSafeInteger(pid) || pid <= 1 || pid === process.pid) return false;
+  try {
+    // Negative PID targets the detached process group on Unix. Windows has no
+    // equivalent here, so restart reconciliation terminates only the persisted
+    // leader PID and may leave descendants for a platform supervisor to clean up.
+    // pid === process.pid prevents a direct self-kill, but cannot prove that a
+    // recycled PID is not the server's Unix process-group ID; callers recovering
+    // persisted PIDs must validate process identity in production.
+    kill(process.platform === "win32" ? pid : -pid, signal);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export async function checkCodexReadiness(config: AppConfig) {
   if (config.DRYVRE_AGENT_FAKE)
     return { ready: true, mode: "fake" as const, version: "fake" };
