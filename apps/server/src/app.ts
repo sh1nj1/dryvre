@@ -11,6 +11,7 @@ import { registerAuth } from './auth.js';
 import { registerLive } from './live.js';
 import { registerRoutes } from './routes.js';
 import { createAgentRuntime } from './agent-runtime.js';
+import { createAgentEventRuntime, type AgentEventRuntime } from './agent-events.js';
 
 export async function buildApp(config: AppConfig) {
   const database = createDatabase(config.DATABASE_URL);
@@ -20,9 +21,11 @@ export async function buildApp(config: AppConfig) {
   await app.register(cors, { origin: config.NODE_ENV === 'development' ? true : false, credentials: true });
   await app.register(websocket);
   registerAuth(app, database.db, config);
-  const publish = registerLive(app, database.db);
+  const runtimes: { events?: AgentEventRuntime } = {};
+  const publish = registerLive(app, database.db, (result, actorId) => runtimes.events?.dispatch(result, actorId));
   const agentRuntime = await createAgentRuntime(database.db, config, publish);
-  registerRoutes(app, database.db, config, publish, agentRuntime);
+  runtimes.events = createAgentEventRuntime(database.db, agentRuntime, publish);
+  registerRoutes(app, database.db, config, publish, agentRuntime, runtimes.events);
 
   if (config.NODE_ENV === 'production') {
     const webRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../web');
@@ -31,6 +34,7 @@ export async function buildApp(config: AppConfig) {
   }
 
   app.addHook('onClose', async () => {
+    await runtimes.events?.close();
     await agentRuntime.close();
     await database.close();
   });

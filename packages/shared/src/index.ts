@@ -76,6 +76,24 @@ export const agentConfigSchema = z
   .strict();
 export type AgentConfig = z.infer<typeof agentConfigSchema>;
 
+export const agentTriggerSchema = z.discriminatedUnion("event", [
+  z.object({
+    event: z.literal("block_created"),
+    mention: z.string().trim().min(1).max(100),
+    workflow: z.enum(["reply", "draft_task"]),
+    streamOnly: z.boolean().optional(),
+    actorKind: z.enum(["human", "agent"]).optional(),
+  }).strict(),
+  z.object({
+    event: z.literal("status_changed"),
+    toStatus: blockStatusSchema,
+    mention: z.string().trim().min(1).max(100),
+    workflow: z.literal("task_loop"),
+    actorKind: z.enum(["human", "agent"]).optional(),
+  }).strict(),
+]);
+export type AgentTrigger = z.infer<typeof agentTriggerSchema>;
+
 export const createAgentRunSchema = z.object({
   agentBlockId: id,
   targetBlockId: id,
@@ -102,6 +120,7 @@ export type BlockDirective = { kind: "agent" | "skill"; slug: string };
 const directivePattern =
   /^#\s+@(agent|skill)\s+([a-z0-9][a-z0-9-]*)\s*(?:\r?\n|$)/;
 const agentConfigPattern = /^```agent-config\s*\r?\n([\s\S]*?)\r?\n```\s*$/;
+const agentTriggerPattern = /^```agent-trigger\s*\r?\n([\s\S]*?)\r?\n```\s*$/;
 const skillFilePattern = /^```file:([^\r\n]+)\s*\r?\n([\s\S]*?)\r?\n```\s*$/;
 
 export function parseBlockDirective(bodyMd: string): BlockDirective | null {
@@ -140,6 +159,7 @@ export function parseAgentDefinition(agent: Block, children: Block[]) {
       .filter(
         (block) =>
           !agentConfigPattern.test(block.bodyMd) &&
+          !agentTriggerPattern.test(block.bodyMd) &&
           parseBlockDirective(block.bodyMd)?.kind !== "skill",
       )
       .map((block) => block.bodyMd.trim()),
@@ -148,6 +168,24 @@ export function parseAgentDefinition(agent: Block, children: Block[]) {
     .join("\n\n");
   if (!instructions) throw new Error("Agent requires instructions");
   return { slug: directive.slug, instructions, config };
+}
+
+export function parseAgentTriggers(agent: Block, children: Block[]) {
+  const directive = parseBlockDirective(agent.bodyMd);
+  if (directive?.kind !== "agent") return [];
+  return children
+    .filter((block) => block.parentId === agent.id)
+    .flatMap((block) => {
+      const match = block.bodyMd.match(agentTriggerPattern);
+      if (!match) return [];
+      let value: unknown;
+      try {
+        value = JSON.parse(match[1] ?? "");
+      } catch {
+        throw new Error(`Agent trigger for ${directive.slug} must contain valid JSON`);
+      }
+      return [{ blockId: block.id, trigger: agentTriggerSchema.parse(value) }];
+    });
 }
 
 export type CompiledSkill = {
