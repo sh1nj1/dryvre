@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import ReactMarkdown from 'react-markdown';
+import ReactMarkdown, { type Components } from 'react-markdown';
 import type { AgentRun, Block, WsServerMessage } from '@dryvre/shared';
 import type { BlockMessage, BlockReference, DryvreBlock, SearchFilters, TaskStatus, ViewMode } from './model';
 import { blockSummary, blockTitle, descendantsOf } from './model';
@@ -7,6 +7,13 @@ import { BlockEditor, type EditorSaveResult } from './block-editor';
 import { api } from './api';
 
 const statusLabels: Record<TaskStatus, string> = { todo: 'To do', in_progress: 'In progress', blocked: 'Blocked', done: 'Done' };
+
+// Render a projected heading title inline via Markdown. Reconstructing `## ${title}`
+// keeps parsing in heading context (inline-only — a title like `1. Foo` can't be
+// reinterpreted as a list), while unwrapping the h2 keeps the formatted title inline
+// where it sits next to sibling controls (e.g. a task line's checkbox and status chip).
+const inlineHeading: Components = { h2: ({ children }) => <>{children}</> };
+const titleMarkdown = (block: Pick<DryvreBlock, 'title' | 'bodyMd'>) => `## ${blockTitle(block)}`;
 
 export function Brand() {
   return <a className="brand" href="/" aria-label="Dryvre home"><span className="brand-mark">D</span><span className="brand-name">dryvre</span></a>;
@@ -114,7 +121,7 @@ export function DocumentView({ scopeId, selectedId, editingId, blocks, reference
     return <div className={depth ? 'doc-children' : ''} key={block.id}>
       <div className={`doc-block ${selectedId === block.id ? 'selected' : ''}`} tabIndex={0} onClick={() => { onSelect(block.id); onEditStart(block.id); }} onKeyDown={(event) => { if (event.key === 'Enter' && event.target === event.currentTarget) { event.preventDefault(); onEditStart(block.id); } }}>
       <span className="drag-handle">⠿</span>
-      {isTask ? <><div className="task-line"><button className={`check ${block.status === 'done' ? 'done' : ''}`} onClick={(event) => { event.stopPropagation(); onStatus(block.id, block.status === 'done' ? 'todo' : 'done'); }}>{block.status === 'done' ? '✓' : ''}</button><span className={block.status === 'done' ? 'done-copy' : ''}>{blockTitle(block)}</span><StatusChip status={block.status!} /></div>{editingId === block.id ? editor(block) : blockSummary(block) && <div className="doc-copy"><ReactMarkdown>{blockSummary(block)}</ReactMarkdown></div>}</> : editingId === block.id ? editor(block) : block.bodyMd ? <div className="doc-copy"><ReactMarkdown>{block.bodyMd}</ReactMarkdown></div> : <h3>{blockTitle(block)}</h3>}
+      {isTask ? <><div className="task-line"><button className={`check ${block.status === 'done' ? 'done' : ''}`} onClick={(event) => { event.stopPropagation(); onStatus(block.id, block.status === 'done' ? 'todo' : 'done'); }}>{block.status === 'done' ? '✓' : ''}</button><span className={block.status === 'done' ? 'done-copy' : ''}><ReactMarkdown components={inlineHeading}>{titleMarkdown(block)}</ReactMarkdown></span><StatusChip status={block.status!} /></div>{editingId === block.id ? editor(block) : blockSummary(block) && <div className="doc-copy"><ReactMarkdown>{blockSummary(block)}</ReactMarkdown></div>}</> : editingId === block.id ? editor(block) : block.bodyMd ? <div className="doc-copy"><ReactMarkdown>{block.bodyMd}</ReactMarkdown></div> : <h3>{blockTitle(block)}</h3>}
       </div>
       {nested.map((child) => renderBlock(child, depth + 1))}
       {showInsert && insertAfter(block)}
@@ -128,7 +135,7 @@ export function DocumentView({ scopeId, selectedId, editingId, blocks, reference
   // full-body ReactMarkdown below. Reconstructing `## ${title}` keeps this in
   // heading context, whose content is inline-only, so a title like `1. Foo`
   // can't be reinterpreted as a list.
-  const scopeHeading = scope ? `## ${blockTitle(scope)}` : '';
+  const scopeHeading = scope ? titleMarkdown(scope) : '';
   const scopeChildren = children.get(scopeId) ?? [];
   return <article className="doc-sheet">
     {scope && scopeId !== 'launch' && <div className={`doc-block ${selectedId === scope.id ? 'selected' : ''}`} onClick={() => { onSelect(scope.id); onEditStart(scope.id); }}><span className="drag-handle">⠿</span>{editingId === scope.id ? editor(scope) : <><ReactMarkdown>{scopeHeading}</ReactMarkdown>{scopeSummary && <div className="doc-copy"><ReactMarkdown>{scopeSummary}</ReactMarkdown></div>}</>}</div>}
