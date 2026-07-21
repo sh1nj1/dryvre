@@ -82,3 +82,68 @@ test('renders blocked as a first-class board and search status', async ({ page }
   const statusFilter = page.getByRole('dialog').locator('.filter-field').filter({ hasText: 'Status' }).locator('select');
   await expect(statusFilter).toContainText('Blocked');
 });
+
+test('runs a ready Local Agent, focuses its result, and can cancel another run', async ({ page }) => {
+  const rootId = '00000000-0000-4000-8000-000000000010';
+  const targetId = '00000000-0000-4000-8000-000000000011';
+  const productId = '00000000-0000-4000-8000-000000000020';
+  const qaId = '00000000-0000-4000-8000-000000000030';
+  const researcherId = '00000000-0000-4000-8000-000000000050';
+  const resultId = '00000000-0000-4000-8000-000000000090';
+  const runId = '00000000-0000-4000-8000-000000000080';
+  const createdAt = new Date('2026-07-21T00:00:00.000Z').toISOString();
+  const block = (id: string, parentId: string | null, path: string, rank: string | null, bodyMd: string, authorId = '00000000-0000-4000-8000-000000000001') => ({ id, parentId, path, rank, bodyMd, status: null, authorId, version: 0, createdAt, updatedAt: createdAt });
+  const blocks = [
+    block(rootId, null, `/${rootId}/`, 'a', '# Dryvre'),
+    block(targetId, rootId, `/${rootId}/${targetId}/`, 'a', '# Demo target'),
+    block(productId, rootId, `/${rootId}/${productId}/`, 'b', '# @agent product-engineer\nImplement focused changes.'),
+    block('00000000-0000-4000-8000-000000000021', productId, `/${rootId}/${productId}/config/`, 'a', '```agent-config\n{"workspace":"dryvre"}\n```'),
+    block(qaId, rootId, `/${rootId}/${qaId}/`, 'c', '# @agent qa\nVerify focused changes.'),
+    block('00000000-0000-4000-8000-000000000031', qaId, `/${rootId}/${qaId}/config/`, 'a', '```agent-config\n{"workspace":"dryvre"}\n```'),
+    block(researcherId, rootId, `/${rootId}/${researcherId}/`, 'd', '# @agent researcher\nCollect evidence.'),
+    block('00000000-0000-4000-8000-000000000051', researcherId, `/${rootId}/${researcherId}/config/`, 'a', '```agent-config\n{"workspace":"dryvre"}\n```'),
+  ];
+  let pollCount = 0;
+  let includeResult = false;
+  let secondRun = false;
+
+  await page.route('**/api/**', async (route) => {
+    const request = route.request();
+    const url = new URL(request.url());
+    if (url.pathname === `/api/trees/${rootId}`) {
+      const result = includeResult ? [block(resultId, targetId, `/${rootId}/${targetId}/${resultId}/`, null, '## Demo Agent Result\n\nImplemented and verified.', '00000000-0000-4000-8000-000000000099')] : [];
+      return route.fulfill({ json: { blocks: [...blocks, ...result] } });
+    }
+    if (url.pathname === '/api/agents/readiness') return route.fulfill({ json: { ready: true, mode: 'fake', version: 'fake' } });
+    if (/^\/api\/agents\/.+\/validate$/.test(url.pathname)) return route.fulfill({ json: { valid: true, agent: { slug: 'demo' }, skills: [{ slug: 'verify-dryvre', files: 1 }, { slug: 'release-check', files: 1 }] } });
+    if (url.pathname === '/api/agent-runs' && request.method() === 'POST') {
+      secondRun = pollCount > 0;
+      return route.fulfill({ status: 202, json: { id: runId, agentBlockId: productId, targetBlockId: targetId, requestedBy: '00000000-0000-4000-8000-000000000001', status: 'queued', codexSessionId: null, startedAt: null, finishedAt: null, errorCode: null } });
+    }
+    if (url.pathname === `/api/agent-runs/${runId}` && request.method() === 'GET') {
+      pollCount += 1;
+      const status = secondRun ? 'running' : pollCount > 1 ? 'succeeded' : 'running';
+      if (status === 'succeeded') includeResult = true;
+      return route.fulfill({ json: { id: runId, agentBlockId: productId, targetBlockId: targetId, requestedBy: '00000000-0000-4000-8000-000000000001', status, codexSessionId: status === 'succeeded' ? 'fake-thread' : null, startedAt: createdAt, finishedAt: status === 'succeeded' ? createdAt : null, errorCode: null } });
+    }
+    if (url.pathname === `/api/agent-runs/${runId}/cancel`) return route.fulfill({ json: { id: runId, agentBlockId: productId, targetBlockId: targetId, requestedBy: '00000000-0000-4000-8000-000000000001', status: 'cancelled', codexSessionId: null, startedAt: createdAt, finishedAt: createdAt, errorCode: 'cancelled' } });
+    return route.fulfill({ status: 404, json: { error: 'Not found' } });
+  });
+
+  await page.goto('/');
+  await expect(page.locator('.agent-readiness')).toContainText('Demo runner · deterministic');
+  await expect(page.locator('.agent-toolbar select option')).toHaveCount(3);
+  await expect(page.locator('.agent-toolbar')).toContainText('2 skills');
+  await page.locator('.agent-target select').selectOption(targetId);
+  await page.getByPlaceholder('Ask this local Codex Agent…').fill('Implement the demo flow.');
+  await page.getByRole('button', { name: 'Run', exact: true }).click();
+  await expect(page.locator('.run-state')).toContainText('Complete');
+  await expect(page.getByText('Implemented and verified.')).toBeVisible();
+  await expect(page.locator('.message.result-focus')).toBeVisible();
+
+  await page.getByPlaceholder('Ask this local Codex Agent…').fill('Run a cancellable check.');
+  await page.getByRole('button', { name: 'Run', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Cancel' })).toBeVisible();
+  await page.getByRole('button', { name: 'Cancel' }).click();
+  await expect(page.locator('.run-state')).toContainText('Cancelled');
+});

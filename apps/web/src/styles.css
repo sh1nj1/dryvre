@@ -140,6 +140,7 @@ main { min-width: 0; min-height: 0; display: flex; flex-direction: column; backg
 .message { margin: 19px 0; display: grid; grid-template-columns: 36px minmax(0, 1fr); gap: 11px; }
 .message .avatar { width: 34px; height: 34px; }
 .message.agent .avatar { color: white; background: var(--ink); border-radius: 9px 9px 9px 2px; }
+.message.result-focus { margin: -9px; padding: 9px; border-radius: 12px; background: var(--accent-soft); box-shadow: 0 0 0 1px rgba(190, 75, 49, .2); }
 .message-head { margin: 1px 0 7px; display: flex; align-items: center; gap: 8px; }
 .message-head strong { font-size: 12px; }
 .message-head span { color: #aaa79f; font-size: 10px; }
@@ -210,6 +211,11 @@ main { min-width: 0; min-height: 0; display: flex; flex-direction: column; backg
 
 
 .agent-composer { margin-top: 9px; }
+.agent-readiness { margin-bottom: 7px; padding: 7px 8px; border: 1px solid var(--line); border-radius: 7px; display: flex; align-items: center; gap: 6px; color: var(--muted); background: var(--panel); font-size: 9px; }
+.agent-readiness i { width: 7px; height: 7px; border-radius: 50%; background: #aaa; }
+.agent-readiness.ready i { background: #5d9364; }
+.agent-readiness.not-ready i { background: #bd694f; }
+.agent-readiness small { display: block; color: #a4543d; }
 .agent-toolbar { display: flex; align-items: center; gap: 8px; }
 .agent-toolbar select { min-width: 0; flex: 1; padding: 7px; border: 1px solid var(--line); border-radius: 7px; background: var(--panel); font-size: 10px; }
 .agent-toolbar span { color: var(--muted); font-size: 9px; }

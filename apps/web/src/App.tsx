@@ -55,6 +55,7 @@ export default function App() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [serverBlocks, setServerBlocks] = useState<Block[]>([]);
   const [serverBacked, setServerBacked] = useState(false);
+  const [focusedMessageId, setFocusedMessageId] = useState<string>();
 
   const refreshServerTree = useCallback(async (focusId?: string, revealStream = false) => {
     try {
@@ -66,6 +67,7 @@ export default function App() {
       setScopeId(focus);
       setSelectedId(focus);
       if (revealStream) setView('stream');
+      return next;
     } catch { /* The mock snapshot remains available for standalone UI demos. */ }
   }, []);
   useEffect(() => {
@@ -107,7 +109,7 @@ export default function App() {
     return block.rank !== null && !directive && !/^```agent-config\b/.test(block.bodyMd);
   });
 
-  const selectFromTree = (id: string) => { setScopeId(id); setSelectedId(id); };
+  const selectFromTree = (id: string) => { setFocusedMessageId(undefined); setScopeId(id); setSelectedId(id); };
   const setStatus = async (id: string, status: TaskStatus) => {
     if (serverBacked) {
       const block = serverBlocks.find((item) => item.id === id);
@@ -193,9 +195,9 @@ export default function App() {
     <main><div className="canvas">
       {view === 'document' && <DocumentView scopeId={scope.id} selectedId={selected.id} editingId={editingId} blocks={snapshot.blocks} references={snapshot.references} onSelect={setSelectedId} onEditStart={setEditingId} onEditEnd={(id) => setEditingId((current) => current === id ? null : current)} onEdit={editBlock} onCreateAfter={createBlockAfter} onDelete={deleteBlock} onStatus={(id, status) => void setStatus(id, status)} />}
       {view === 'board' && <BoardView blocks={scopeBlocks} messages={snapshot.messages} selectedId={selected.id} onSelect={setSelectedId} onStatus={(id, status) => void setStatus(id, status)} />}
-      {view === 'stream' && <StreamView selected={selected} messages={selectedMessages} onSend={(body) => void sendMessage(body)} />}
+      {view === 'stream' && <StreamView selected={selected} messages={selectedMessages} focusedMessageId={focusedMessageId} onSend={(body) => void sendMessage(body)} />}
     </div></main>
-    <ContextRail selected={selected} path={selectedScopePath} blocks={snapshot.blocks} references={snapshot.references} messages={selectedMessages} agents={agents} agentTargets={agentTargets} onAgentSent={(targetId) => refreshServerTree(targetId, true)} onOpenStream={() => setView('stream')} />
+    <ContextRail selected={selected} path={selectedScopePath} blocks={snapshot.blocks} references={snapshot.references} messages={selectedMessages} agents={agents} agentTargets={agentTargets} onAgentSent={(targetId, resultBlockId) => { void refreshServerTree(targetId, true).then((next) => { const fallback = next?.filter((block) => block.parentId === targetId && block.rank === null).at(-1)?.id; setFocusedMessageId(resultBlockId ?? fallback); }); }} onOpenStream={() => setView('stream')} />
     <SearchDialog open={searchOpen} blocks={snapshot.blocks} scopePath={scopePath} onClose={closeSearch} onApply={(filters) => void applySearch(filters)} />
   </div>;
 }

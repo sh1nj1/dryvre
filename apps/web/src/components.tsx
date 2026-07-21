@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
-import type { AgentRun, Block } from '@dryvre/shared';
+import type { AgentRun, Block, WsServerMessage } from '@dryvre/shared';
 import type { BlockMessage, BlockReference, DryvreBlock, SearchFilters, TaskStatus, ViewMode } from './model';
 import { descendantsOf } from './model';
 import { BlockEditor, type EditorSaveResult } from './block-editor';
-import { api } from './api';
+import { api, connectLive } from './api';
 
 const statusLabels: Record<TaskStatus, string> = { todo: 'To do', in_progress: 'In progress', blocked: 'Blocked', done: 'Done' };
 
@@ -136,16 +136,18 @@ export function BoardView({ blocks, messages, selectedId, onSelect, onStatus }: 
   })}</div>;
 }
 
-export function StreamView({ selected, messages, onSend }: { selected: DryvreBlock; messages: BlockMessage[]; onSend: (body: string) => void }) {
+export function StreamView({ selected, messages, focusedMessageId, onSend }: { selected: DryvreBlock; messages: BlockMessage[]; focusedMessageId: string | undefined; onSend: (body: string) => void }) {
   const [value, setValue] = useState('');
+  const focusedMessage = useRef<HTMLElement>(null);
+  useEffect(() => { focusedMessage.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }); }, [focusedMessageId, messages]);
   const send = () => { if (!value.trim()) return; onSend(value.trim()); setValue(''); };
   return <div className="stream-layout">
-    {messages.length ? messages.map((message) => <article className={`message ${message.agent ? 'agent' : ''}`} key={message.id}><div className="avatar">{message.initials}</div><div><div className="message-head"><strong>{message.author}</strong><span>{message.timeLabel}</span></div><div className="message-body"><p>{message.body}</p>{message.createdBlocks && <div className="agent-output">{message.createdBlocks.map((body) => <div className="agent-block" key={body}>{body}</div>)}</div>}</div><div className="message-actions">Reply · Reference · •••</div></div></article>) : <div className="empty-stream"><strong>No messages yet</strong><span>Start a conversation in this block.</span></div>}
+    {messages.length ? messages.map((message) => <article ref={message.id === focusedMessageId ? focusedMessage : undefined} className={`message ${message.agent ? 'agent' : ''} ${message.id === focusedMessageId ? 'result-focus' : ''}`} key={message.id}><div className="avatar">{message.initials}</div><div><div className="message-head"><strong>{message.author}</strong><span>{message.timeLabel}</span></div><div className="message-body"><p>{message.body}</p>{message.createdBlocks && <div className="agent-output">{message.createdBlocks.map((body) => <div className="agent-block" key={body}>{body}</div>)}</div>}</div><div className="message-actions">Reply · Reference · •••</div></div></article>) : <div className="empty-stream"><strong>No messages yet</strong><span>Start a conversation in this block.</span></div>}
     <div className="composer"><textarea value={value} onChange={(event) => setValue(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) send(); }} placeholder="Write to this block… Use @ to mention people, agents, or blocks" /><div className="composer-actions"><span className="context-chip">◎ {selected.title}</span><button className="tool-pill">@ Reference</button><button className="send-btn" aria-label="Send message" disabled={!value.trim()} onClick={send}>↑</button></div></div>
   </div>;
 }
 
-export function ContextRail({ selected, path, blocks, references, messages, agents, agentTargets, onAgentSent, onOpenStream }: { selected: DryvreBlock; path: DryvreBlock[]; blocks: DryvreBlock[]; references: BlockReference[]; messages: BlockMessage[]; agents: Block[]; agentTargets: Block[]; onAgentSent: (targetId: string) => void; onOpenStream: () => void }) {
+export function ContextRail({ selected, path, blocks, references, messages, agents, agentTargets, onAgentSent, onOpenStream }: { selected: DryvreBlock; path: DryvreBlock[]; blocks: DryvreBlock[]; references: BlockReference[]; messages: BlockMessage[]; agents: Block[]; agentTargets: Block[]; onAgentSent: (targetId: string, resultBlockId?: string) => void; onOpenStream: () => void }) {
   const relevantRefs = references.filter((reference) => reference.fromId === selected.id);
   const descendants = descendantsOf(selected.id, blocks);
   return <aside className="context-rail"><header className="rail-head"><strong>Block context</strong><span>Auto-built</span></header><div className="rail-scroll"><div className="inspector-label">Selected block</div><div className="selected-card"><span className="path">{path.slice(0, -1).map((block) => block.title).join(' / ') || 'Root'}</span><h3>{selected.title}</h3><p>{selected.bodyMd ?? 'A first-class block in the shared tree.'}</p><div className="selected-meta">Updated {selected.updatedLabel} · {selected.author}</div></div>
@@ -185,13 +187,66 @@ const runLabels: Record<AgentRun['status'], string> = {
   queued: 'Queued', running: 'Codex is working…', succeeded: 'Complete', failed: 'Failed', cancelled: 'Cancelled',
 };
 
-export function AgentComposer({ agents, targets, onSent }: { agents: Block[]; targets: Block[]; onSent: (targetId: string) => void }) {
+const agentErrors: Record<string, string> = {
+  auth_required: 'Run codex login, then refresh readiness.',
+  codex_not_found: 'Install Codex CLI or enable fake mode.',
+  dryvre_mcp_not_built: 'Build the Dryvre MCP entrypoint before running Codex.',
+  invalid_definition: 'Fix this Agent or Skill definition.',
+  invalid_workspace: 'Configure this named Agent workspace on the server.',
+  agent_busy: 'This Agent already has an active run.',
+  runner_busy: 'Two Local Agents are already running.',
+  timeout: 'The Agent timed out before producing a result.',
+};
+
+function agentError(value: string) {
+  return agentErrors[value] ?? value.replaceAll('_', ' ');
+}
+
+export function AgentComposer({ agents, targets, onSent }: { agents: Block[]; targets: Block[]; onSent: (targetId: string, resultBlockId?: string) => void }) {
   const [agentId, setAgentId] = useState(agents[0]?.id ?? '');
   const [targetId, setTargetId] = useState(targets[0]?.id ?? '');
   const [value, setValue] = useState('');
   const [run, setRun] = useState<AgentRun>();
   const [skillNames, setSkillNames] = useState<string[]>([]);
   const [error, setError] = useState<string>();
+  const [readiness, setReadiness] = useState<Awaited<ReturnType<typeof api.agentReadiness>>>();
+  const [live, setLive] = useState(false);
+  const runRef = useRef<AgentRun | undefined>(undefined);
+  const targetRef = useRef(targetId);
+  const onSentRef = useRef(onSent);
+  const completedRuns = useRef(new Set<string>());
+  runRef.current = run;
+  targetRef.current = targetId;
+  onSentRef.current = onSent;
+
+  useEffect(() => {
+    let active = true;
+    void api.agentReadiness().then((next) => {
+      if (active) setReadiness(next);
+    }).catch((reason: unknown) => {
+      if (active) setError(reason instanceof Error ? reason.message : 'Could not check Codex readiness');
+    });
+    return () => { active = false; };
+  }, []);
+
+  useEffect(() => connectLive(
+    () => undefined,
+    setLive,
+    (message: WsServerMessage) => {
+      const current = runRef.current;
+      if (!current || !('runId' in message) || message.runId !== current.id) return;
+      if (message.type === 'agent_run_status') {
+        setRun({ ...current, status: message.status });
+        return;
+      }
+      if (message.type !== 'agent_run_finished' || completedRuns.current.has(current.id)) return;
+      completedRuns.current.add(current.id);
+      void api.agentRun(current.id).then((next) => {
+        setRun(next);
+        onSentRef.current(targetRef.current, message.resultBlockId);
+      }).catch(() => onSentRef.current(targetRef.current, message.resultBlockId));
+    },
+  ), []);
 
   useEffect(() => {
     if (!agents.some((agent) => agent.id === agentId)) setAgentId(agents[0]?.id ?? '');
@@ -217,34 +272,44 @@ export function AgentComposer({ agents, targets, onSent }: { agents: Block[]; ta
     const timer = window.setInterval(() => {
       void api.agentRun(run.id).then((next) => {
         setRun(next);
-        if (!['queued', 'running'].includes(next.status)) onSent(targetId);
+        if (!['queued', 'running'].includes(next.status) && !completedRuns.current.has(next.id)) {
+          completedRuns.current.add(next.id);
+          onSent(targetId);
+        }
       }).catch(() => undefined);
-    }, 800);
+    }, live ? 2_000 : 800);
     return () => window.clearInterval(timer);
-  }, [onSent, run, targetId]);
+  }, [live, onSent, run, targetId]);
 
   async function send() {
     if (!agentId || !targetId || !value.trim() || run && ['queued', 'running'].includes(run.status)) return;
     setError(undefined);
     try {
       const next = await api.startAgentRun({ agentBlockId: agentId, targetBlockId: targetId, prompt: value, resume: true });
+      completedRuns.current.delete(next.id);
       setRun(next);
       setValue('');
-    } catch (reason) { setError(reason instanceof Error ? reason.message : 'Could not start Agent'); }
+    } catch (reason) { setError(agentError(reason instanceof Error ? reason.message : 'Could not start Agent')); }
   }
 
   async function cancel() {
     if (!run) return;
     try { setRun(await api.cancelAgentRun(run.id)); }
-    catch (reason) { setError(reason instanceof Error ? reason.message : 'Could not cancel Agent'); }
+    catch (reason) { setError(agentError(reason instanceof Error ? reason.message : 'Could not cancel Agent')); }
   }
 
   const busy = run && ['queued', 'running'].includes(run.status);
+  const readinessLabel = !readiness
+    ? 'Checking Local Agent…'
+    : readiness.ready
+      ? `${readiness.mode === 'fake' ? 'Demo runner' : readiness.version ?? 'Codex'} · ${readiness.mode === 'fake' ? 'deterministic' : 'Dryvre MCP ready'}`
+      : 'Local Agent unavailable';
   return <div className="agent-composer">
+    <div className={`agent-readiness ${readiness?.ready ? 'ready' : 'not-ready'}`}><i />{readinessLabel}{readiness?.error && <small>{agentError(readiness.error)}</small>}</div>
     <div className="agent-toolbar"><select value={agentId} onChange={(event) => setAgentId(event.target.value)} disabled={Boolean(busy)}>{agents.map((agent) => <option value={agent.id} key={agent.id}>{(agent.bodyMd ?? '').match(/^#\s+@agent\s+([^\n]+)/)?.[1] ?? 'Agent'}</option>)}</select><span>{skillNames.length ? `${skillNames.length} skills` : 'No skills'}</span></div>
     <label className="agent-target"><span>Target</span><select value={targetId} onChange={(event) => setTargetId(event.target.value)} disabled={Boolean(busy)}>{targets.map((target) => <option value={target.id} key={target.id}>{target.bodyMd.replace(/^#+\s*/, '').split('\n')[0] || 'Untitled block'}</option>)}</select></label>
-    <div className="composer"><textarea value={value} placeholder="Ask this local Codex Agent…" onChange={(event) => setValue(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); void send(); } }} /><button disabled={Boolean(busy) || !value.trim() || !agentId || !targetId} onClick={() => void send()}>{busy ? 'Running' : 'Run'}</button></div>
-    {run && <div className={`run-state run-${run.status}`}><i />{runLabels[run.status]}{run.errorCode && <small>{run.errorCode.replaceAll('_', ' ')}</small>}{busy && <button onClick={() => void cancel()}>Cancel</button>}</div>}
+    <div className="composer"><textarea value={value} placeholder="Ask this local Codex Agent…" onChange={(event) => setValue(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); void send(); } }} /><button disabled={!readiness?.ready || Boolean(busy) || !value.trim() || !agentId || !targetId} onClick={() => void send()}>{busy ? 'Running' : 'Run'}</button></div>
+    {run && <div className={`run-state run-${run.status}`}><i />{runLabels[run.status]}{run.errorCode && <small>{agentError(run.errorCode)}</small>}{busy && <button onClick={() => void cancel()}>Cancel</button>}</div>}
     {error && <div className="agent-error">{error}</div>}
   </div>;
 }

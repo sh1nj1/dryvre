@@ -37,10 +37,22 @@ export const opEnvelopeSchema = z.object({
 });
 export type OpEnvelope = z.infer<typeof opEnvelopeSchema>;
 
+export const agentRunStatusSchema = z.enum([
+  'queued',
+  'running',
+  'succeeded',
+  'failed',
+  'cancelled',
+]);
+export type AgentRunStatus = z.infer<typeof agentRunStatusSchema>;
+
 export const wsServerMessageSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('ready'), actorId: id }),
   z.object({ type: z.literal('applied'), clientOpId: id, sequence: z.number().int(), op: blockOpSchema }),
   z.object({ type: z.literal('rejected'), clientOpId: id, reason: z.string() }),
+  z.object({ type: z.literal('agent_run_status'), runId: id, status: agentRunStatusSchema }),
+  z.object({ type: z.literal('agent_run_output'), runId: id, text: z.string() }),
+  z.object({ type: z.literal('agent_run_finished'), runId: id, resultBlockId: id.optional(), errorCode: z.string().optional() }),
 ]);
 export type WsServerMessage = z.infer<typeof wsServerMessageSchema>;
 
@@ -52,15 +64,6 @@ export function deriveBlockKind(bodyMd: string) {
   if (/^(?:[-*+] |\d+\. )/.test(bodyMd)) return 'list';
   return 'paragraph';
 }
-
-export const agentRunStatusSchema = z.enum([
-  "queued",
-  "running",
-  "succeeded",
-  "failed",
-  "cancelled",
-]);
-export type AgentRunStatus = z.infer<typeof agentRunStatusSchema>;
 
 export const agentConfigSchema = z
   .object({

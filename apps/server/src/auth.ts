@@ -36,10 +36,16 @@ export function registerAuth(app: FastifyInstance, db: DryvreDatabase, config: A
   });
 }
 
-export async function createSession(db: DryvreDatabase, config: AppConfig, reply: FastifyReply, subjectId: string) {
+export async function createSessionToken(db: DryvreDatabase, config: AppConfig, subjectId: string, ttlMs = 30 * 24 * 60 * 60 * 1000) {
   const token = randomBytes(32).toString('base64url');
-  const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
-  await db.insert(sessions).values({ subjectId, tokenHash: digest(token, config.SESSION_SECRET), expiresAt });
+  const expiresAt = new Date(Date.now() + ttlMs);
+  const [session] = await db.insert(sessions).values({ subjectId, tokenHash: digest(token, config.SESSION_SECRET), expiresAt }).returning({ id: sessions.id });
+  if (!session) throw new Error('Could not create session');
+  return { id: session.id, token, expiresAt };
+}
+
+export async function createSession(db: DryvreDatabase, config: AppConfig, reply: FastifyReply, subjectId: string) {
+  const { token, expiresAt } = await createSessionToken(db, config, subjectId);
   reply.setCookie(COOKIE_NAME, token, { httpOnly: true, sameSite: 'lax', secure: config.NODE_ENV === 'production', path: '/', expires: expiresAt });
 }
 

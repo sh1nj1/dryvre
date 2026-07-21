@@ -13,6 +13,8 @@ const configSchema = z.object({
   DRYVRE_AGENT_DATA_DIR: z.string().default('.dryvre-data/agent-runtime'),
   DRYVRE_AGENT_TIMEOUT_MS: z.coerce.number().int().positive().default(15 * 60 * 1000),
   DRYVRE_AGENT_FAKE: z.enum(['true', 'false']).default('false').transform((value) => value === 'true'),
+  DRYVRE_AGENT_MCP_URL: z.string().url().optional(),
+  DRYVRE_AGENT_MCP_ENTRY: z.string().optional(),
 });
 
 export type AppConfig = z.infer<typeof configSchema>;

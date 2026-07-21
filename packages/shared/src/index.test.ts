@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { blockOpSchema, compileSkills, deriveBlockKind, parseAgentDefinition, parseBlockDirective, parseCodexJsonl, sortBlocksInDocumentOrder, type Block } from './index.js';
+import { blockOpSchema, compileSkills, deriveBlockKind, parseAgentDefinition, parseBlockDirective, parseCodexJsonl, sortBlocksInDocumentOrder, wsServerMessageSchema, type Block } from './index.js';
 
 const baseBlock = (overrides: Partial<Block>): Block => ({
   id: crypto.randomUUID(),
@@ -34,6 +34,15 @@ describe('shared block contract', () => {
     for (const status of ['todo', 'in_progress', 'blocked', 'done']) {
       expect(blockOpSchema.safeParse({ type: 'setStatus', id, status }).success).toBe(true);
     }
+  });
+});
+
+describe('Agent live events', () => {
+  it('accepts status and completion events with a focused result block', () => {
+    const runId = '00000000-0000-4000-8000-000000000070';
+    const resultBlockId = '00000000-0000-4000-8000-000000000071';
+    expect(wsServerMessageSchema.parse({ type: 'agent_run_status', runId, status: 'running' })).toEqual({ type: 'agent_run_status', runId, status: 'running' });
+    expect(wsServerMessageSchema.parse({ type: 'agent_run_finished', runId, resultBlockId })).toEqual({ type: 'agent_run_finished', runId, resultBlockId });
   });
 });
 
