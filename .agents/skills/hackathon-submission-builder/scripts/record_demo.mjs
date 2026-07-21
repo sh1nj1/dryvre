@@ -28,7 +28,7 @@ await context.addInitScript((values) => {
   for (const [key, value] of Object.entries(values.sessionStorage ?? {})) sessionStorage.setItem(key, String(value));
 }, { localStorage: fixtures.localStorage, sessionStorage: fixtures.sessionStorage });
 
-for (const route of fixtures.routes ?? []) {
+for (const route of [...(fixtures.routes ?? [])].reverse()) {
   await context.route(route.url, async (requestRoute) => {
     if (route.method && requestRoute.request().method().toUpperCase() !== route.method.toUpperCase()) {
       await requestRoute.fallback();

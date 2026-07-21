@@ -8,9 +8,11 @@ import hashlib
 import json
 import re
 import shutil
+import stat
 import subprocess
 import sys
-from pathlib import Path
+import zipfile
+from pathlib import Path, PurePosixPath
 
 SECRET_PATH = re.compile(r"(^|/)(\.env($|\.)|id_rsa|id_ed25519|.*\.(pem|key|p12)|cookies?\.json$)", re.I)
 FORBIDDEN_PATH = re.compile(r"(^|/)node_modules(/|$)", re.I)
@@ -27,6 +29,44 @@ def sha256(path: Path) -> str:
         for chunk in iter(lambda: stream.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def inspect_zip(path: Path, relative: str, errors: list[str], warnings: list[str]) -> None:
+    try:
+        with zipfile.ZipFile(path) as archive:
+            for member in archive.infolist():
+                member_name = member.filename.replace("\\", "/")
+                location = f"{relative}!/{member_name}"
+                if member_name.startswith("/") or ".." in PurePosixPath(member_name).parts:
+                    errors.append(f"unsafe archive member path: {location}")
+                if stat.S_ISLNK(member.external_attr >> 16):
+                    errors.append(f"symbolic link in archive: {location}")
+                if FORBIDDEN_PATH.search(member_name):
+                    errors.append(f"forbidden archived path: {location}")
+                if SECRET_PATH.search(member_name):
+                    errors.append(f"secret-like archived path: {location}")
+                if member.is_dir():
+                    continue
+                suffix = PurePosixPath(member_name).suffix.lower()
+                if suffix == ".zip":
+                    errors.append(f"nested archive cannot be inspected: {location}")
+                    continue
+                if member.flag_bits & 0x1:
+                    errors.append(f"encrypted archive member cannot be inspected: {location}")
+                    continue
+                if member.file_size <= 2_000_000 and suffix not in {
+                    ".png", ".jpg", ".jpeg", ".gif", ".pdf", ".mp4", ".webm",
+                }:
+                    try:
+                        text = archive.read(member).decode("utf-8")
+                    except UnicodeDecodeError:
+                        continue
+                    if SECRET_TEXT.search(text):
+                        errors.append(f"possible credential in archive: {location}")
+                    if "TODO-BLOCKED:" in text:
+                        warnings.append(f"unresolved blocker in archive: {location}")
+    except (zipfile.BadZipFile, zipfile.LargeZipFile):
+        errors.append(f"unreadable zip archive: {relative}")
 
 
 def main() -> int:
@@ -75,6 +115,8 @@ def main() -> int:
             errors.append(f"forbidden packaged path: {relative}")
         if SECRET_PATH.search(relative):
             errors.append(f"secret-like file path: {relative}")
+        if path.suffix.lower() == ".zip":
+            inspect_zip(path, relative, errors, warnings)
         if path.stat().st_size <= 2_000_000 and path.suffix.lower() not in {".png", ".jpg", ".jpeg", ".gif", ".pdf", ".mp4", ".webm", ".zip"}:
             try:
                 text = path.read_text(encoding="utf-8")
