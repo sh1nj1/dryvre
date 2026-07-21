@@ -8,6 +8,13 @@
       "when": 1784563451635,
       "tag": "0000_silky_taskmaster",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1784637645616,
+      "tag": "0001_nostalgic_luckman",
+      "breakpoints": true
     }
   ]
 }

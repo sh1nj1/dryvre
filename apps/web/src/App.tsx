@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { parseBlockDirective } from '@dryvre/shared';
 import { dryvreDataSource } from './data-source';
 import { BoardView, ContextRail, DocumentView, SearchDialog, Sidebar, StreamView, Topbar } from './components';
 import type { DryvreSnapshot, SearchFilters, TaskStatus, ViewMode } from './model';
@@ -43,6 +44,7 @@ export default function App() {
   const selectedScopePath = selectedPath.slice(Math.max(0, selectedPath.findIndex((block) => block.id === scope.id)));
   const scopeBlocks = [scope, ...descendantsOf(scope.id, snapshot.blocks)];
   const selectedMessages = snapshot.messages.filter((message) => message.parentId === selected.id);
+  const agents = snapshot.blocks.filter((block) => parseBlockDirective(block.bodyMd ?? '')?.kind === 'agent');
 
   const selectFromTree = (id: string) => { setScopeId(id); setSelectedId(id); };
   const setStatus = async (id: string, status: TaskStatus) => {
@@ -93,7 +95,7 @@ export default function App() {
       {view === 'board' && <BoardView blocks={scopeBlocks} messages={snapshot.messages} selectedId={selected.id} onSelect={setSelectedId} onStatus={(id, status) => void setStatus(id, status)} />}
       {view === 'stream' && <StreamView selected={selected} messages={selectedMessages} onSend={(body) => void sendMessage(body)} />}
     </div></main>
-    <ContextRail selected={selected} path={selectedScopePath} blocks={snapshot.blocks} references={snapshot.references} messages={selectedMessages} onOpenStream={() => setView('stream')} />
+    <ContextRail selected={selected} path={selectedScopePath} blocks={snapshot.blocks} references={snapshot.references} messages={selectedMessages} agents={agents} onAgentSent={() => void dryvreDataSource.load().then(setSnapshot)} onOpenStream={() => setView('stream')} />
     <SearchDialog open={searchOpen} blocks={snapshot.blocks} scopePath={scopePath} onClose={closeSearch} onApply={(filters) => void applySearch(filters)} />
   </div>;
 }

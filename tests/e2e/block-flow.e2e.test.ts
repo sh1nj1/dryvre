@@ -36,6 +36,10 @@ beforeAll(async () => {
     DATABASE_URL: container.getConnectionUri(),
     SESSION_SECRET: 'e2e-only-secret-at-least-32-characters',
     OPENAI_MODEL: 'gpt-5.6',
+    CODEX_COMMAND: 'codex',
+    DRYVRE_AGENT_DATA_DIR: '.dryvre-data/e2e-agent-runtime',
+    DRYVRE_AGENT_TIMEOUT_MS: 1_000,
+    DRYVRE_AGENT_FAKE: true,
   };
   app = await buildApp(config);
   origin = await app.listen({ host: '127.0.0.1', port: 0 });
