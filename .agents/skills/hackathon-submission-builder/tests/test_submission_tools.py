@@ -59,6 +59,8 @@ class PolicyTests(unittest.TestCase):
     def test_stream_scanner_covers_encodings_and_credentials(self):
         fixtures = [
             b"prefix\xffOPENAI_API_KEY=abcdefghijklmnop",
+            b'{"OPENAI_API_KEY":"sk-abcdefghijklmnop"}',
+            b"'STRIPE_SECRET_KEY': 'sk_live_abcdefghijklmnop'",
             "client_secret=abcdefghijklmnop".encode("utf-16-le"),
             b"DATABASE_URL=postgres://user:pass@localhost/db",
             b"SLACK_BOT_TOKEN=xoxb-12345678",
@@ -68,6 +70,16 @@ class PolicyTests(unittest.TestCase):
                 errors: list[str] = []
                 policy.scan_text_stream(io.BytesIO(content), "fixture", errors, [])
                 self.assertTrue(errors)
+
+    def test_quoted_provider_placeholders_are_not_overmatched(self):
+        errors: list[str] = []
+        policy.scan_text_stream(
+            io.BytesIO(b'{"OPENAI_API_KEY":"replace-me"}'),
+            "fixture",
+            errors,
+            [],
+        )
+        self.assertEqual(errors, [])
 
 
 class PackagerTests(unittest.TestCase):
@@ -197,6 +209,29 @@ class PackagerTests(unittest.TestCase):
             packager.build_submission(
                 self.spec, self.project, [], self.root / "submission"
             )
+
+    def test_quoted_provider_key_fails_end_to_end_validation(self):
+        source = self.project / "configuration.json"
+        source.write_text(
+            json.dumps({"OPENAI_API_KEY": "sk-abcdefghijklmnop"}),
+            encoding="utf-8",
+        )
+        self.write_spec(
+            [
+                {
+                    "id": "configuration",
+                    "source": "configuration.json",
+                    "destination": "02-technical/configuration.json",
+                }
+            ]
+        )
+        output = self.root / "submission"
+        packager.build_submission(self.spec, self.project, [], output)
+        result = validator.validate_submission(output)
+        self.assertFalse(result["valid"])
+        self.assertTrue(
+            any("possible credential" in error for error in result["errors"])
+        )
 
 
 class ValidatorTests(unittest.TestCase):

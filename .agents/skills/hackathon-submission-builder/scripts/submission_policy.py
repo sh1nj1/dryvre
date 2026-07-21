@@ -43,8 +43,8 @@ FORBIDDEN_PATH = re.compile(
 SECRET_TEXT = re.compile(
     r"(-----BEGIN (?:[A-Z0-9]+(?: [A-Z0-9]+)* )?PRIVATE KEY-----|"
     r"xox(?:a|b|p|r|s)-[A-Za-z0-9-]{8,}|"
-    r"(?:OPENAI|ANTHROPIC|AWS_SECRET_ACCESS|GITHUB|GH|STRIPE)_[A-Z0-9_]*"
-    r"\s*[=:]\s*['\"]?[A-Za-z0-9_\-/+=]{16,}|"
+    r"(?P<provider_quote>['\"]?)(?:OPENAI|ANTHROPIC|AWS_SECRET_ACCESS|GITHUB|GH|STRIPE)_[A-Z0-9_]*"
+    r"(?P=provider_quote)\s*[=:]\s*['\"]?[A-Za-z0-9_\-/+=]{16,}|"
     r"(?:_auth|_authToken|npmAuthToken)\s*[=:]\s*['\"]?[A-Za-z0-9_\-/+=]{8,}|"
     r"(?:client_secret|clientSecret)['\"]?\s*[=:]\s*['\"]?"
     r"[A-Za-z0-9_.\-/+=]{8,}|"
