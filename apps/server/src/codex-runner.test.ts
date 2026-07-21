@@ -63,6 +63,7 @@ describe("Codex runner", () => {
     expect(managedConfig).toContain("required = true");
     expect(managedConfig).toContain('args = ["/tmp/dryvre mcp/index.js"]');
     expect(managedConfig).toContain('env_vars = ["DRYVRE_URL", "DRYVRE_SESSION"]');
+    expect(managedConfig).toContain('default_tools_approval_mode = "approve"');
     expect(managedConfig).not.toContain("dryvre_session=");
   });
 
