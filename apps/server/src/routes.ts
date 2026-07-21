@@ -8,6 +8,7 @@ import type { AppConfig } from './config.js';
 import { applyOperation, getAiContext, getSubtree } from './block-service.js';
 import { requireActor } from './auth.js';
 import type { AgentRuntime } from './agent-runtime.js';
+import type { LivePublisher } from './live.js';
 
 const treeParams = z.object({ id: z.string().uuid() });
 const treeQuery = z.object({ q: z.string().optional() });
@@ -15,7 +16,7 @@ const aiBody = z.object({ blockId: z.string().uuid(), prompt: z.string().min(1).
 const blockIdParams = z.object({ blockId: z.string().uuid() });
 const runIdParams = z.object({ id: z.string().uuid() });
 
-export function registerRoutes(app: FastifyInstance, db: DryvreDatabase, config: AppConfig, publish: (message: unknown) => void, agentRuntime: AgentRuntime) {
+export function registerRoutes(app: FastifyInstance, db: DryvreDatabase, config: AppConfig, publish: LivePublisher, agentRuntime: AgentRuntime) {
   app.get('/api/health', async () => ({ ok: true }));
   app.get('/api/agents/readiness', async () => agentRuntime.readiness());
 

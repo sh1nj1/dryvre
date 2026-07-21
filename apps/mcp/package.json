@@ -6,7 +6,7 @@
   "bin": { "dryvre-mcp": "../../dist/mcp/index.js" },
   "scripts": {
     "dev": "tsx src/index.ts",
-    "build": "tsup --config tsup.config.ts",
+    "build": "tsup --config tsup.config.ts && node --check ../../dist/mcp/index.js",
     "typecheck": "tsc -p tsconfig.json",
     "start": "node ../../dist/mcp/index.js"
   },

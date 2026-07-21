@@ -4,7 +4,7 @@ import type { AgentRun, Block, WsServerMessage } from '@dryvre/shared';
 import type { BlockMessage, BlockReference, DryvreBlock, SearchFilters, TaskStatus, ViewMode } from './model';
 import { descendantsOf } from './model';
 import { BlockEditor, type EditorSaveResult } from './block-editor';
-import { api, connectLive } from './api';
+import { api } from './api';
 
 const statusLabels: Record<TaskStatus, string> = { todo: 'To do', in_progress: 'In progress', blocked: 'Blocked', done: 'Done' };
 
@@ -136,12 +136,12 @@ export function BoardView({ blocks, messages, selectedId, onSelect, onStatus }: 
   })}</div>;
 }
 
-export function StreamView({ selected, messages, focusedMessageId, agents, agentTarget, onSend, onAgentSent }: { selected: DryvreBlock; messages: BlockMessage[]; focusedMessageId: string | undefined; agents: Block[]; agentTarget: Block | undefined; onSend: (body: string) => void; onAgentSent: (targetId: string, resultBlockId?: string) => void }) {
+export function StreamView({ selected, messages, focusedMessageId, agents, agentTarget, live, liveMessage, onSend, onAgentSent }: { selected: DryvreBlock; messages: BlockMessage[]; focusedMessageId: string | undefined; agents: Block[]; agentTarget: Block | undefined; live: boolean; liveMessage: WsServerMessage | undefined; onSend: (body: string) => void; onAgentSent: (targetId: string, resultBlockId?: string) => void }) {
   const focusedMessage = useRef<HTMLElement>(null);
   useEffect(() => { focusedMessage.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }); }, [focusedMessageId, messages]);
   return <div className="stream-layout">
     {messages.length ? messages.map((message) => <article ref={message.id === focusedMessageId ? focusedMessage : undefined} className={`message ${message.agent ? 'agent' : ''} ${message.id === focusedMessageId ? 'result-focus' : ''}`} key={message.id}><div className="avatar">{message.initials}</div><div><div className="message-head"><strong>{message.author}</strong><span>{message.timeLabel}</span></div><div className="message-body"><p>{message.body}</p>{message.createdBlocks && <div className="agent-output">{message.createdBlocks.map((body) => <div className="agent-block" key={body}>{body}</div>)}</div>}</div><div className="message-actions">Reply · Reference · •••</div></div></article>) : <div className="empty-stream"><strong>No messages yet</strong><span>Start a conversation in this block.</span></div>}
-    <StreamComposer selected={selected} agents={agents} target={agentTarget} onSend={onSend} onSent={onAgentSent} />
+    <StreamComposer selected={selected} agents={agents} target={agentTarget} live={live} liveMessage={liveMessage} onSend={onSend} onSent={onAgentSent} />
   </div>;
 }
 
@@ -199,14 +199,13 @@ function agentError(value: string) {
   return agentErrors[value] ?? value.replaceAll('_', ' ');
 }
 
-export function StreamComposer({ selected, agents, target, onSend, onSent }: { selected: DryvreBlock; agents: Block[]; target: Block | undefined; onSend: (body: string) => void; onSent: (targetId: string, resultBlockId?: string) => void }) {
+export function StreamComposer({ selected, agents, target, live, liveMessage, onSend, onSent }: { selected: DryvreBlock; agents: Block[]; target: Block | undefined; live: boolean; liveMessage: WsServerMessage | undefined; onSend: (body: string) => void; onSent: (targetId: string, resultBlockId?: string) => void }) {
   const [agentId, setAgentId] = useState('');
   const [value, setValue] = useState('');
   const [run, setRun] = useState<AgentRun>();
   const [skillNames, setSkillNames] = useState<string[]>([]);
   const [error, setError] = useState<string>();
   const [readiness, setReadiness] = useState<Awaited<ReturnType<typeof api.agentReadiness>>>();
-  const [live, setLive] = useState(false);
   const runRef = useRef<AgentRun | undefined>(undefined);
   const targetRef = useRef<string | undefined>(undefined);
   const onSentRef = useRef(onSent);
@@ -226,26 +225,20 @@ export function StreamComposer({ selected, agents, target, onSend, onSent }: { s
   }, [agents.length, target]);
 
   useEffect(() => {
-    if (!agents.length || !target) return;
-    return connectLive(
-    () => undefined,
-    setLive,
-    (message: WsServerMessage) => {
-      const current = runRef.current;
-      if (!current || !('runId' in message) || message.runId !== current.id) return;
-      if (message.type === 'agent_run_status') {
-        setRun({ ...current, status: message.status });
-        return;
-      }
-      if (message.type !== 'agent_run_finished' || completedRuns.current.has(current.id)) return;
-      completedRuns.current.add(current.id);
-      void api.agentRun(current.id).then((next) => {
-	setRun(next);
-	if (targetRef.current) onSentRef.current(targetRef.current, message.resultBlockId);
-      }).catch(() => { if (targetRef.current) onSentRef.current(targetRef.current, message.resultBlockId); });
-    },
-    );
-  }, [agents.length, target]);
+    const message = liveMessage;
+    const current = runRef.current;
+    if (!message || !current || !('runId' in message) || message.runId !== current.id) return;
+    if (message.type === 'agent_run_status') {
+      setRun({ ...current, status: message.status });
+      return;
+    }
+    if (message.type !== 'agent_run_finished' || completedRuns.current.has(current.id)) return;
+    completedRuns.current.add(current.id);
+    void api.agentRun(current.id).then((next) => {
+      setRun(next);
+      if (targetRef.current) onSentRef.current(targetRef.current, message.resultBlockId);
+    }).catch(() => { if (targetRef.current) onSentRef.current(targetRef.current, message.resultBlockId); });
+  }, [liveMessage]);
 
   useEffect(() => {
     if (agentId && !agents.some((agent) => agent.id === agentId)) setAgentId('');

@@ -7,6 +7,5 @@ export default defineConfig({
   target: 'node22',
   clean: true,
   outDir: '../../dist/mcp',
-  banner: { js: '#!/usr/bin/env node' },
   noExternal: ['@dryvre/shared'],
 });
