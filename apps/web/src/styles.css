@@ -304,4 +304,5 @@ body.panel-resizing { cursor: col-resize; user-select: none; }
   .task-line { align-items: flex-start; }
   .filter-grid { grid-template-columns: 1fr; }
   .search-dialog-foot > span { display: none; }
+  .composer-shortcut-hint { display: none; }
 }
