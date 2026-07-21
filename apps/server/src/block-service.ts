@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { and, asc, eq, isNull, like, or, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNull, like, or, sql } from 'drizzle-orm';
 import { blocks, opLog, refs, type DryvreDatabase } from '@dryvre/db';
 import { sortBlocksInDocumentOrder, type Block, type BlockOp, type OpEnvelope } from '@dryvre/shared';
 
@@ -29,6 +29,14 @@ export async function getSubtree(db: DryvreDatabase, rootId: string, query?: str
     search ? sql`to_tsvector('simple', ${blocks.bodyMd}) @@ plainto_tsquery('simple', ${search})` : undefined,
   ));
   return sortBlocksInDocumentOrder(rows.map(serializeBlock));
+}
+
+export async function getReferences(db: DryvreDatabase, blockIds: string[]) {
+  if (!blockIds.length) return [];
+  return db.select({ fromId: refs.fromBlockId, toId: refs.toBlockId }).from(refs).where(or(
+    inArray(refs.fromBlockId, blockIds),
+    inArray(refs.toBlockId, blockIds),
+  ));
 }
 
 async function assertVersion(tx: DryvreTransaction, id: string, version?: number) {
@@ -65,7 +73,8 @@ async function applyMutation(tx: DryvreTransaction, op: BlockOp, actorId: string
   const now = new Date();
   switch (op.type) {
     case 'create': {
-      const blockId = op.id ?? randomUUID();
+      const blockId = op.id;
+      if (!blockId) throw new Error('Create operation requires a normalized block id');
       const parent = op.parentId ? await tx.query.blocks.findFirst({ where: eq(blocks.id, op.parentId) }) : null;
       if (op.parentId && !parent) throw new Error('Parent block not found');
       const rank = op.stream ? null : `${Date.now().toString(36)}:${blockId}`;
@@ -111,11 +120,14 @@ async function applyMutation(tx: DryvreTransaction, op: BlockOp, actorId: string
 export async function applyOperationInTransaction(tx: DryvreTransaction, envelope: OpEnvelope, actorId: string) {
   const existing = await tx.query.opLog.findFirst({ where: and(eq(opLog.clientOpId, envelope.clientOpId), eq(opLog.actorId, actorId)) });
   if (existing) return { sequence: existing.sequence, op: existing.payload as BlockOp };
-  const [logged] = await tx.insert(opLog).values({ clientOpId: envelope.clientOpId, actorId, op: envelope.op.type, payload: envelope.op }).returning({ sequence: opLog.sequence });
-  await applyMutation(tx, envelope.op, actorId);
+  const op: BlockOp = envelope.op.type === 'create' && !envelope.op.id
+    ? { ...envelope.op, id: randomUUID() }
+    : envelope.op;
+  const [logged] = await tx.insert(opLog).values({ clientOpId: envelope.clientOpId, actorId, op: op.type, payload: op }).returning({ sequence: opLog.sequence });
+  await applyMutation(tx, op, actorId);
   if (!logged) throw new Error('Could not append operation log');
   await tx.execute(sql`select pg_notify('dryvre_ops', ${JSON.stringify({ sequence: logged.sequence, actorId })})`);
-  return { sequence: logged.sequence, op: envelope.op };
+  return { sequence: logged.sequence, op };
 }
 
 export async function applyOperation(db: DryvreDatabase, envelope: OpEnvelope, actorId: string) {

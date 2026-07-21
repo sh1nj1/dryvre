@@ -27,6 +27,7 @@ agent_loop(
   task_block_id, agent_block_id, activated_by, trigger_version, state,
   request_block_id?, agent_run_id?, resume_status?, created_at, updated_at
 )
+agent_trigger_delivery(trigger_block_id, op_sequence, status, error?, created_at, updated_at)
 session(id, subject_id, expires_at)
 ```
 
@@ -42,6 +43,7 @@ session(id, subject_id, expires_at)
 - `agent_binding`은 `@agent` 정의 블록과 실행 subject를 연결한다.
 - `agent_run`은 Local Codex 프로세스 한 번의 실행 상태를 보관하며 [로컬 Agent와 계층형 Skill 스펙](agent-runtime-spec.md)의 기존 계약을 유지한다.
 - `agent_loop`는 작업 활성화부터 계약 검사, 사용자 입력 대기, 실행과 검증까지의 상위 조율 projection이다. `(task_block_id, trigger_version)`은 유일하고 상태는 `checking`, `waiting_input`, `ready`, `running`, `verifying`, `completed`, `failed`로 제한한다. 활성 질문과 실제 도구 실행은 각각 `request_block_id`, `agent_run_id`로 연결한다. `waiting_input`에서는 `resume_status`에 `todo` 또는 `in_progress`를 저장한다.
+- `agent-trigger` 블록은 Agent가 구독할 `block_created` 또는 `status_changed` 이벤트, 멘션, actor 종류와 고정 workflow를 선언한다. 서버는 승인된 `op_log`를 이벤트 원본으로 사용하고 `agent_trigger_delivery(trigger_block_id, op_sequence)`로 한 번만 전달한다. 별도 메시지 브로커나 범용 규칙 빌더를 만들지 않는다.
 - 런타임 테이블에는 재시도, 중복 실행 방지와 프로세스 제어에 필요한 메타데이터만 둔다. 사용자에게 보이는 계획, 질문, 결과와 검증 근거는 블록에 저장한다.
 
 ## 뷰별 투영
@@ -97,7 +99,7 @@ delete(id)
 
 ## 에이전트 실행 루프
 
-`setStatus(id, todo)`가 승인되면 같은 `op_log`를 고정 작업 루프의 트리거로 사용한다. 실행기는 해당 블록이나 그 작업 정의에 명시적으로 멘션된 `@agent` 블록만 깨운다. 상태가 없는 초안, 에이전트가 지정되지 않은 작업과 이미 `agent_loop`에 기록된 `(task_block_id, trigger_version)`은 실행하지 않는다.
+승인된 `create`와 `setStatus` 연산은 같은 `op_log`에서 Agent 이벤트로 전달된다. Agent의 직접 자식 `agent-trigger` 블록이 이벤트 종류, 멘션, 상태와 workflow를 선언한다. PM Agent의 stream `block_created` 구독은 요청을 작업 초안으로 만들고, Developer Agent의 `status_changed(toStatus=todo)` 구독은 아래 고정 작업 루프를 시작한다. 상태가 없는 초안, 에이전트가 지정되지 않은 작업과 이미 `agent_loop`에 기록된 `(task_block_id, trigger_version)`은 실행하지 않는다.
 
 실행 순서는 다음과 같다.
 

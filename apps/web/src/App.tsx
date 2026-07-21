@@ -11,12 +11,14 @@ import { moveMockBlock, planBlockMove, type TreeDropPosition } from './block-dra
 import './styles.css';
 
 const HUMAN_ID = '00000000-0000-4000-8000-000000000001';
+const LAUNCH_ID = '00000000-0000-4000-8000-000000000120';
 
 function titleOf(block: Block) {
   return block.bodyMd.replace(/^#+\s*/, '').split('\n')[0] || 'Untitled';
 }
 
-function toServerSnapshot(blocks: Block[]): DryvreSnapshot {
+function toServerSnapshot(blocks: Block[], references: Array<{ fromId: string; toId: string }> = []): DryvreSnapshot {
+  const byId = new Map(blocks.map((block) => [block.id, block]));
   return {
     rootId: ROOT_ID,
     focusedRootId: ROOT_ID,
@@ -41,8 +43,12 @@ function toServerSnapshot(blocks: Block[]): DryvreSnapshot {
       body: block.bodyMd,
       timeLabel: new Date(block.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       agent: block.authorId !== HUMAN_ID,
+      referenceIds: references.filter((reference) => reference.fromId === block.id).map((reference) => reference.toId),
     })),
-    references: [],
+    references: references.map((reference) => ({
+      ...reference,
+      summary: titleOf(byId.get(reference.toId) ?? blocks[0]!),
+    })),
   };
 }
 
@@ -61,12 +67,14 @@ export default function App() {
   const [liveOnline, setLiveOnline] = useState(false);
   const [liveMessage, setLiveMessage] = useState<WsServerMessage>();
   const [draggedBlockId, setDraggedBlockId] = useState<string | null>(null);
+  const [inboxId, setInboxId] = useState<string>();
   const panelLayout = usePanelLayout(view);
 
   const syncServerTree = useCallback(async () => {
-    const next = sortBlocksInDocumentOrder((await api.tree(ROOT_ID)).blocks);
+    const response = await api.tree(ROOT_ID);
+    const next = sortBlocksInDocumentOrder(response.blocks);
     setServerBlocks(next);
-    setSnapshot(toServerSnapshot(next));
+    setSnapshot(toServerSnapshot(next, response.references));
     setServerBacked(true);
     return next;
   }, []);
@@ -83,7 +91,10 @@ export default function App() {
   useEffect(() => {
     void dryvreDataSource.load().then((initial) => {
       setSnapshot(initial);
-      if (import.meta.env.VITE_MOCK_DATA_ONLY !== 'true') return refreshServerTree();
+      if (import.meta.env.VITE_MOCK_DATA_ONLY !== 'true') {
+        void api.inbox().then((inbox) => setInboxId(inbox.blockId)).catch(() => undefined);
+        return refreshServerTree(LAUNCH_ID);
+      }
     });
   }, [refreshServerTree]);
   useEffect(() => {
@@ -116,7 +127,11 @@ export default function App() {
   const selectedPath = blockPath(selected.id, snapshot.blocks);
   const selectedScopePath = selectedPath.slice(Math.max(0, selectedPath.findIndex((block) => block.id === scope.id)));
   const scopeBlocks = [scope, ...descendantsOf(scope.id, snapshot.blocks)];
-  const selectedMessages = snapshot.messages.filter((message) => message.parentId === selected.id);
+  // A block's stream is its direct child messages plus their depth-1 replies,
+  // so an answer typed under an Inbox approval request (a grandchild of the
+  // Inbox) stays visible instead of vanishing after the refresh.
+  const directMessageIds = new Set(snapshot.messages.filter((message) => message.parentId === selected.id).map((message) => message.id));
+  const selectedMessages = snapshot.messages.filter((message) => message.parentId === selected.id || (message.parentId !== null && directMessageIds.has(message.parentId)));
   const agents = serverBlocks.filter((block) => parseBlockDirective(block.bodyMd)?.kind === 'agent');
   const agentTargets = serverBlocks.filter((block) => {
     const directive = parseBlockDirective(block.bodyMd);
@@ -157,13 +172,13 @@ export default function App() {
     }
     setSelectedId(id);
   };
-  const sendMessage = async (body: string) => {
+  const sendMessage = async (body: string, parentId = selected.id) => {
     if (serverBacked) {
-      await api.apply({ type: 'create', parentId: selected.id, bodyMd: body, stream: true });
+      await api.apply({ type: 'create', parentId, bodyMd: body, stream: true });
       await syncServerTree();
       return;
     }
-    const message = await dryvreDataSource.createMessage(selected.id, body);
+    const message = await dryvreDataSource.createMessage(parentId, body);
     setSnapshot((current) => current && ({ ...current, messages: [...current.messages, message] }));
   };
   const applySearch = async (filters: SearchFilters) => {
@@ -231,7 +246,7 @@ export default function App() {
 
   return <div className="app-shell" style={{ '--sidebar': `${panelLayout.left}px`, '--context': `${panelLayout.right}px` } as CSSProperties}>
     <Topbar path={scopePath} view={view} mobileTreeOpen={mobileTreeOpen} onView={setView} onToggleMobileTree={() => setMobileTreeOpen((open) => !open)} />
-    <Sidebar blocks={snapshot.blocks} rootId={snapshot.rootId} selectedId={scope.id} visibleIds={visibleIds} mobileOpen={mobileTreeOpen} onSelect={selectFromTree} onOpenSearch={() => setSearchOpen(true)} onClose={() => setMobileTreeOpen(false)} onDragStart={setDraggedBlockId} onDragEnd={() => setDraggedBlockId(null)} />
+    <Sidebar blocks={snapshot.blocks} rootId={snapshot.rootId} inboxId={inboxId} selectedId={scope.id} visibleIds={visibleIds} mobileOpen={mobileTreeOpen} onSelect={selectFromTree} onOpenInbox={(id) => { selectFromTree(id); setView('stream'); setMobileTreeOpen(false); }} onOpenSearch={() => setSearchOpen(true)} onClose={() => setMobileTreeOpen(false)} onDragStart={setDraggedBlockId} onDragEnd={() => setDraggedBlockId(null)} />
     <main className={view === 'stream' ? 'workspace workspace-hidden' : 'workspace'}><div className="canvas">
       {view === 'document' && <DocumentView scopeId={scope.id} selectedId={selected.id} editingId={editingId} blocks={snapshot.blocks} references={snapshot.references} draggedBlockId={draggedBlockId} onSelect={setSelectedId} onEditStart={setEditingId} onEditEnd={(id) => setEditingId((current) => current === id ? null : current)} onEdit={editBlock} onCreateAfter={createBlockAfter} onDelete={deleteBlock} onStatus={(id, status) => void setStatus(id, status)} onDragStart={setDraggedBlockId} onDragEnd={() => setDraggedBlockId(null)} onMove={(id, targetId, position) => void moveBlock(id, targetId, position)} />}
       {view === 'board' && <BoardView blocks={scopeBlocks} messages={snapshot.messages} selectedId={selected.id} draggedBlockId={draggedBlockId} onSelect={setSelectedId} onStatus={(id, status) => void setStatus(id, status)} onDragStart={setDraggedBlockId} onDragEnd={() => setDraggedBlockId(null)} />}
@@ -239,7 +254,7 @@ export default function App() {
     {/* Move one mounted Stream between the work surface and companion rail so Agent observers survive view switches. */}
     <section className={`stream-host ${view === 'stream' ? 'stream-host-main' : 'stream-host-rail'}`} aria-label={`Stream for ${selected.title}`}>
       <header className="rail-head stream-rail-head"><div><strong>Stream</strong><span>{selected.title}</span></div><button aria-label="Open full Stream" onClick={() => setView('stream')}>↗</button></header>
-      <StreamView selected={selected} messages={selectedMessages} focusedMessageId={focusedMessageId} agents={agents} agentTarget={agentTarget} live={liveOnline} liveMessage={liveMessage} contextSummary={contextSummary} onSend={(body) => void sendMessage(body)} onAgentSent={handleAgentSent} />
+      <StreamView selected={selected} messages={selectedMessages} focusedMessageId={focusedMessageId} agents={agents} agentTarget={agentTarget} live={liveOnline} liveMessage={liveMessage} contextSummary={contextSummary} onSend={(body, parentId) => void sendMessage(body, parentId)} onAgentSent={handleAgentSent} />
     </section>
     {view === 'stream' && <ContextRail selected={selected} path={selectedScopePath} blocks={snapshot.blocks} references={snapshot.references} />}
     <PanelResizer className="panel-resizer-left" label="Resize tree panel" value={panelLayout.left} min={panelLayout.leftMin} max={panelLayout.leftMax} direction={1} onResize={panelLayout.setLeft} onReset={panelLayout.resetLeft} />

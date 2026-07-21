@@ -32,6 +32,7 @@ export interface BlockMessage {
   timeLabel: string;
   agent?: boolean;
   createdBlocks?: string[];
+  referenceIds?: string[];
 }
 
 export interface DryvreSnapshot {

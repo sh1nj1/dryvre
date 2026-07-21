@@ -15,6 +15,7 @@
     "test:skill": "PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s .agents/skills/hackathon-submission-builder/tests -p 'test_*.py' && node --test .agents/skills/hackathon-submission-builder/tests/test_video_scenario.mjs",
     "test:e2e": "vitest run --config vitest.e2e.config.ts",
     "test:e2e:web": "playwright test",
+    "test:e2e:demo": "playwright test --config playwright.demo.config.ts",
     "test:smoke:codex": "npm run build -w @dryvre/mcp && tsx scripts/smoke-real-codex-mcp.ts",
     "lint": "eslint .",
     "format": "prettier --write .",

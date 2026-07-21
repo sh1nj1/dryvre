@@ -53,6 +53,22 @@ Agent는 본문 첫 줄이 다음 형식인 일반 블록 하나다.
 
 MVP 설정 키는 `workspace`, `model`, `reasoningEffort` 세 개뿐이다. 임의 command, 환경 변수와 추가 CLI 인자는 받지 않는다. Agent 블록은 정본 정의이고, 연결된 `subject(kind=agent)`는 작성자 표시와 권한 판정을 위한 실행 identity일 뿐 별도 사용자 개념이 아니다.
 
+### Agent 이벤트 트리거
+
+Agent의 직접 자식 `agent-trigger` code block은 승인된 block operation을 Agent 실행 또는 고정 작업 루프에 연결한다.
+
+````md
+```agent-trigger
+{"event":"block_created","mention":"PM Agent","workflow":"draft_task","streamOnly":true,"actorKind":"human"}
+```
+
+```agent-trigger
+{"event":"status_changed","toStatus":"todo","mention":"Developer Agent","workflow":"task_loop","actorKind":"human"}
+```
+````
+
+`event`는 `block_created|status_changed`, workflow는 현재 데모에 필요한 `reply|draft_task|task_loop`만 허용한다. `op_log` sequence와 trigger 블록 ID의 조합은 한 번만 전달된다. 이는 여러 Agent가 같은 종류의 block event를 구독할 수 있는 공통 실행 계층이지만, 사용자가 임의 조건과 동작을 조립하는 범용 트리거 빌더는 아니다.
+
 ### Skill 블록
 
 Skill은 본문 첫 줄이 다음 형식인 일반 블록이다.
