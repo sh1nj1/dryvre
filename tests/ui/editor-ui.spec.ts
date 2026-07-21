@@ -85,6 +85,27 @@ test('sends from the companion Stream without leaving Document and keeps the new
   await expect(page.locator('.message').nth(1)).toContainText('Newest message');
 });
 
+test('sends with Enter, keeps Shift+Enter for new lines, and ignores IME confirmation', async ({ page }) => {
+  await page.goto('/app');
+
+  const composer = page.locator('.stream-host-rail').getByPlaceholder('Write to this block');
+  await expect(page.locator('.stream-host-rail .composer-shortcut-hint')).toHaveText('Enter to send · Shift+Enter for new line');
+
+  await composer.fill('First line');
+  await composer.press('Shift+Enter');
+  await composer.type('Second line');
+  await expect(composer).toHaveValue('First line\nSecond line');
+
+  await composer.fill('한글 조합 중');
+  await composer.evaluate((element) => {
+    element.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', isComposing: true, bubbles: true }));
+  });
+  await expect(composer).toHaveValue('한글 조합 중');
+
+  await composer.press('Enter');
+  await expect(composer).toHaveValue('');
+});
+
 test('inserts and edits a block from the hover affordance', async ({ page }) => {
   await page.goto('/app');
 
