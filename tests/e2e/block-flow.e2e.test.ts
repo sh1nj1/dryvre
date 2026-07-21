@@ -120,6 +120,37 @@ describe('Dryvre API with PostgreSQL', () => {
       .toEqual([olderId, newerId]);
   });
 
+  it('moves canonical blocks before siblings and inside other blocks', async () => {
+    const parentId = randomUUID();
+    const firstId = randomUUID();
+    const secondId = randomUUID();
+    for (const op of [
+      { type: 'create', id: parentId, parentId: ROOT_ID, bodyMd: 'Move parent', stream: false },
+      { type: 'create', id: firstId, parentId, bodyMd: 'First sibling', stream: false },
+      { type: 'create', id: secondId, parentId, bodyMd: 'Second sibling', stream: false },
+    ]) {
+      expect((await post('/api/ops', { clientOpId: randomUUID(), op })).status).toBe(200);
+    }
+
+    const reorderResponse = await post('/api/ops', {
+      clientOpId: randomUUID(),
+      op: { type: 'move', id: secondId, parentId, afterId: null, version: 0 },
+    });
+    expect(reorderResponse.status, await reorderResponse.text()).toBe(200);
+    let tree = await (await fetch(`${origin}/api/trees/${ROOT_ID}`)).json() as { blocks: Array<{ id: string; parentId: string | null; path: string }> };
+    expect(tree.blocks.findIndex((block) => block.id === secondId)).toBeLessThan(tree.blocks.findIndex((block) => block.id === firstId));
+
+    const nestResponse = await post('/api/ops', {
+      clientOpId: randomUUID(),
+      op: { type: 'move', id: secondId, parentId: firstId, afterId: null, version: 1 },
+    });
+    expect(nestResponse.status, await nestResponse.text()).toBe(200);
+    tree = await (await fetch(`${origin}/api/trees/${ROOT_ID}`)).json() as { blocks: Array<{ id: string; parentId: string | null; path: string }> };
+    const moved = tree.blocks.find((block) => block.id === secondId);
+    expect(moved).toEqual(expect.objectContaining({ parentId: firstId }));
+    expect(moved?.path).toContain(`/${firstId}/${secondId}/`);
+  });
+
   it('runs two seeded Agents with shared Skills and publishes live completion events', async () => {
     await expect(fetch(`${origin}/api/agents/readiness`).then((result) => result.json())).resolves.toEqual({ ready: true, mode: 'fake', version: 'fake' });
 

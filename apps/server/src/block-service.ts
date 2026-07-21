@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { and, asc, eq, like, or, sql } from 'drizzle-orm';
+import { and, asc, eq, isNull, like, or, sql } from 'drizzle-orm';
 import { blocks, opLog, refs, type DryvreDatabase } from '@dryvre/db';
 import { sortBlocksInDocumentOrder, type Block, type BlockOp, type OpEnvelope } from '@dryvre/shared';
 
@@ -37,6 +37,30 @@ async function assertVersion(tx: DryvreTransaction, id: string, version?: number
   if (current[0]?.version !== version) throw new Error(`Block ${id} changed on the server`);
 }
 
+async function canonicalRankAfter(
+  tx: DryvreTransaction,
+  movingId: string,
+  parentId: string | null,
+  afterId: string | null,
+) {
+  const siblings = await tx.select().from(blocks).where(parentId ? eq(blocks.parentId, parentId) : isNull(blocks.parentId));
+  const canonicalIds = siblings
+    .filter((block) => block.rank !== null && block.id !== movingId)
+    .sort((left, right) => left.rank!.localeCompare(right.rank!) || left.createdAt.getTime() - right.createdAt.getTime() || left.id.localeCompare(right.id))
+    .map((block) => block.id);
+  if (afterId) {
+    const afterIndex = canonicalIds.indexOf(afterId);
+    if (afterIndex < 0) throw new Error('The preceding block is not a canonical child of the destination');
+    canonicalIds.splice(afterIndex + 1, 0, movingId);
+  } else {
+    canonicalIds.unshift(movingId);
+  }
+  for (const [index, siblingId] of canonicalIds.entries()) {
+    await tx.update(blocks).set({ rank: `a${index.toString().padStart(8, '0')}` }).where(eq(blocks.id, siblingId));
+  }
+  return `a${canonicalIds.indexOf(movingId).toString().padStart(8, '0')}`;
+}
+
 async function applyMutation(tx: DryvreTransaction, op: BlockOp, actorId: string) {
   const now = new Date();
   switch (op.type) {
@@ -61,10 +85,13 @@ async function applyMutation(tx: DryvreTransaction, op: BlockOp, actorId: string
       const moving = await tx.query.blocks.findFirst({ where: eq(blocks.id, op.id) });
       const parent = op.parentId ? await tx.query.blocks.findFirst({ where: eq(blocks.id, op.parentId) }) : null;
       if (!moving || (op.parentId && !parent)) throw new Error('Block or destination not found');
+      if (!moving.parentId) throw new Error('The root block cannot be moved');
       if (parent?.path.startsWith(moving.path)) throw new Error('Cannot move a block inside its own subtree');
       const newPath = `${parent?.path ?? '/'}${moving.id}/`;
-      await tx.execute(sql`update ${blocks} set path = ${newPath} || substring(path from ${moving.path.length + 1}) where path like ${`${moving.path}%`}`);
-      await tx.update(blocks).set({ parentId: op.parentId, rank: op.rank, version: sql`${blocks.version} + 1`, updatedAt: now }).where(eq(blocks.id, op.id));
+      await tx.update(blocks).set({ path: sql`${newPath} || substr(${blocks.path}, ${moving.path.length + 1})` }).where(like(blocks.path, `${moving.path}%`));
+      const rank = op.afterId !== undefined ? await canonicalRankAfter(tx, moving.id, op.parentId, op.afterId) : op.rank;
+      if (rank === undefined) throw new Error('Move requires afterId or rank');
+      await tx.update(blocks).set({ parentId: op.parentId, rank, version: sql`${blocks.version} + 1`, updatedAt: now }).where(eq(blocks.id, op.id));
       break;
     }
     case 'ref':

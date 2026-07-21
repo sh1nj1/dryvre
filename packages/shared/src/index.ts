@@ -22,7 +22,14 @@ const version = z.number().int().nonnegative().optional();
 
 export const blockOpSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('create'), id: id.optional(), parentId: id.nullable(), afterId: id.optional(), bodyMd: z.string().max(100_000), stream: z.boolean().default(false) }),
-  z.object({ type: z.literal('move'), id, parentId: id.nullable(), rank: z.string().nullable(), version }),
+  z.object({
+    type: z.literal('move'),
+    id,
+    parentId: id.nullable(),
+    afterId: id.nullable().optional(),
+    rank: z.string().nullable().optional(),
+    version,
+  }),
   z.object({ type: z.literal('edit'), id, bodyMd: z.string().max(100_000), version }),
   z.object({ type: z.literal('setStatus'), id, status: blockStatusSchema.nullable(), version }),
   z.object({ type: z.literal('ref'), fromId: id, toId: id }),

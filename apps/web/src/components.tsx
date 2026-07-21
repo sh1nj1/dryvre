@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type DragEvent } from 'react';
 import ReactMarkdown, { type Components } from 'react-markdown';
 import type { AgentRun, Block, WsServerMessage } from '@dryvre/shared';
 import type { BlockMessage, BlockReference, DryvreBlock, SearchFilters, TaskStatus, ViewMode } from './model';
@@ -6,6 +6,7 @@ import { blockSummary, blockTitle, descendantsOf, headingMarkdown } from './mode
 import { BlockEditor, type EditorSaveResult } from './block-editor';
 import { api } from './api';
 import { isEnterToSendViewport, shouldSendComposerMessage } from './composer-keyboard';
+import { dropPositionFromPointer, type TreeDropPosition } from './block-drag';
 
 const statusLabels: Record<TaskStatus, string> = { todo: 'To do', in_progress: 'In progress', blocked: 'Blocked', done: 'Done' };
 
@@ -32,7 +33,7 @@ export function Topbar({ path, view, mobileTreeOpen, onView, onToggleMobileTree 
   </header>;
 }
 
-export function Sidebar({ blocks, rootId, selectedId, visibleIds, mobileOpen, onSelect, onOpenSearch, onClose }: {
+export function Sidebar({ blocks, rootId, selectedId, visibleIds, mobileOpen, onSelect, onOpenSearch, onClose, onDragStart, onDragEnd }: {
   blocks: DryvreBlock[];
   rootId: string;
   selectedId: string;
@@ -41,6 +42,8 @@ export function Sidebar({ blocks, rootId, selectedId, visibleIds, mobileOpen, on
   onSelect: (id: string) => void;
   onOpenSearch: () => void;
   onClose: () => void;
+  onDragStart: (id: string) => void;
+  onDragEnd: () => void;
 }) {
   const children = useMemo(() => {
     const map = new Map<string | null, DryvreBlock[]>();
@@ -56,7 +59,7 @@ export function Sidebar({ blocks, rootId, selectedId, visibleIds, mobileOpen, on
     if (visibleIds && !visibleIds.has(block.id)) return null;
     const nested = children.get(block.id) ?? [];
     return <div key={block.id}>
-      <button className={`tree-row ${selectedId === block.id ? 'active' : ''}`} style={{ paddingLeft: 8 + depth * 20 }} onClick={() => { onSelect(block.id); onClose(); }}>
+      <button className={`tree-row ${selectedId === block.id ? 'active' : ''}`} draggable={block.id !== rootId} onDragStart={(event) => { event.dataTransfer.effectAllowed = 'move'; event.dataTransfer.setData('text/plain', block.id); onDragStart(block.id); }} onDragEnd={onDragEnd} style={{ paddingLeft: 8 + depth * 20 }} onClick={() => { onSelect(block.id); onClose(); }}>
       <span className="chev">{nested.length ? '⌄' : ''}</span><span className="node-icon">{block.icon ?? '◇'}</span><span className="node-label">{blockTitle(block)}</span>
       </button>
       {nested.map((child) => renderNode(child, depth + 1))}
@@ -88,7 +91,7 @@ function StatusChip({ status }: { status: TaskStatus }) {
   return <span className={`status-chip ${status}`}>{marker}{statusLabels[status]}</span>;
 }
 
-export function DocumentView({ scopeId, selectedId, editingId, blocks, references, onSelect, onEditStart, onEditEnd, onEdit, onCreateAfter, onDelete, onStatus }: {
+export function DocumentView({ scopeId, selectedId, editingId, blocks, references, draggedBlockId, onSelect, onEditStart, onEditEnd, onEdit, onCreateAfter, onDelete, onStatus, onDragStart, onDragEnd, onMove }: {
   scopeId: string;
   selectedId: string;
   editingId: string | null;
@@ -101,7 +104,12 @@ export function DocumentView({ scopeId, selectedId, editingId, blocks, reference
   onCreateAfter: (id: string, bodyMd: string) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
   onStatus: (id: string, status: TaskStatus) => void;
+  draggedBlockId: string | null;
+  onDragStart: (id: string) => void;
+  onDragEnd: () => void;
+  onMove: (blockId: string, targetId: string, position: TreeDropPosition) => void;
 }) {
+  const [dropTarget, setDropTarget] = useState<{ id: string; position: TreeDropPosition } | null>(null);
   const children = useMemo(() => {
     const map = new Map<string, DryvreBlock[]>();
     blocks.filter((block) => block.canonical).forEach((block) => {
@@ -117,11 +125,30 @@ export function DocumentView({ scopeId, selectedId, editingId, blocks, reference
   const referenceSentence = <div className="doc-block reference-sentence" key="reference-sentence"><span className="drag-handle">⠿</span><p>Launch criteria are informed by {[...refTargets.values()].filter(Boolean).map((target) => <button className="ref-chip" key={target!.id} onClick={() => onSelect(target!.id)}>↗ {blockTitle(target!)}</button>)}</p></div>;
   const editor = (block: DryvreBlock) => <BlockEditor bodyMd={block.bodyMd ?? ''} version={block.version ?? 0} onEdit={(bodyMd, version) => onEdit(block.id, bodyMd, version)} onCreateAfter={(bodyMd) => onCreateAfter(block.id, bodyMd)} onDelete={() => onDelete(block.id)} onExit={() => onEditEnd(block.id)} />;
   const insertAfter = (block: DryvreBlock) => <button className="block-insert" key={`insert-${block.id}`} aria-label={`Insert block after ${blockTitle(block)}`} onClick={() => void onCreateAfter(block.id, '')}><span aria-hidden="true">＋</span></button>;
+  const dragProps = (block: DryvreBlock) => ({
+    draggable: editingId !== block.id && block.id !== blocks.find((item) => item.parentId === null)?.id,
+    onDragStart: (event: DragEvent<HTMLElement>) => { event.stopPropagation(); event.dataTransfer.effectAllowed = 'move'; event.dataTransfer.setData('text/plain', block.id); onDragStart(block.id); },
+    onDragEnd: () => { setDropTarget(null); onDragEnd(); },
+    onDragOver: (event: DragEvent<HTMLElement>) => {
+      if (!draggedBlockId || draggedBlockId === block.id) return;
+      event.preventDefault(); event.stopPropagation(); event.dataTransfer.dropEffect = 'move';
+      const rect = event.currentTarget.getBoundingClientRect();
+      setDropTarget({ id: block.id, position: dropPositionFromPointer(rect.top, rect.height, event.clientY) });
+    },
+    onDragLeave: (event: DragEvent<HTMLElement>) => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDropTarget((current) => current?.id === block.id ? null : current); },
+    onDrop: (event: DragEvent<HTMLElement>) => {
+      if (!draggedBlockId) return;
+      event.preventDefault(); event.stopPropagation();
+      const rect = event.currentTarget.getBoundingClientRect();
+      const position = dropPositionFromPointer(rect.top, rect.height, event.clientY);
+      setDropTarget(null); onMove(draggedBlockId, block.id, position); onDragEnd();
+    },
+  });
   const renderBlock = (block: DryvreBlock, depth = 0, showInsert = true): React.ReactNode => {
     const nested = children.get(block.id) ?? [];
     const isTask = Boolean(block.status);
     return <div className={depth ? 'doc-children' : ''} key={block.id}>
-      <div className={`doc-block ${selectedId === block.id ? 'selected' : ''}`} tabIndex={0} onClick={() => { onSelect(block.id); onEditStart(block.id); }} onKeyDown={(event) => { if (event.key === 'Enter' && event.target === event.currentTarget) { event.preventDefault(); onEditStart(block.id); } }}>
+      <div {...dragProps(block)} className={`doc-block ${selectedId === block.id ? 'selected' : ''} ${dropTarget?.id === block.id ? `drop-${dropTarget.position}` : ''}`} tabIndex={0} onClick={() => { onSelect(block.id); onEditStart(block.id); }} onKeyDown={(event) => { if (event.key === 'Enter' && event.target === event.currentTarget) { event.preventDefault(); onEditStart(block.id); } }}>
       <span className="drag-handle">⠿</span>
       {isTask ? <><div className="task-line"><button className={`check ${block.status === 'done' ? 'done' : ''}`} onClick={(event) => { event.stopPropagation(); onStatus(block.id, block.status === 'done' ? 'todo' : 'done'); }}>{block.status === 'done' ? '✓' : ''}</button><span className={block.status === 'done' ? 'done-copy' : ''}><ReactMarkdown components={inlineHeading}>{headingMarkdown(block)}</ReactMarkdown></span><StatusChip status={block.status!} /></div>{editingId === block.id ? editor(block) : blockSummary(block) && <div className="doc-copy"><ReactMarkdown>{blockSummary(block)}</ReactMarkdown></div>}</> : editingId === block.id ? editor(block) : block.bodyMd ? <div className="doc-copy"><ReactMarkdown>{block.bodyMd}</ReactMarkdown></div> : <h3>{blockTitle(block)}</h3>}
       </div>
@@ -139,16 +166,17 @@ export function DocumentView({ scopeId, selectedId, editingId, blocks, reference
   const scopeHeading = scope ? headingMarkdown(scope) : '';
   const scopeChildren = children.get(scopeId) ?? [];
   return <article className="doc-sheet">
-    {scope && scopeId !== 'launch' && <div className={`doc-block ${selectedId === scope.id ? 'selected' : ''}`} onClick={() => { onSelect(scope.id); onEditStart(scope.id); }}><span className="drag-handle">⠿</span>{editingId === scope.id ? editor(scope) : <><ReactMarkdown>{scopeHeading}</ReactMarkdown>{scopeSummary && <div className="doc-copy"><ReactMarkdown>{scopeSummary}</ReactMarkdown></div>}</>}</div>}
+    {scope && scopeId !== 'launch' && <div {...dragProps(scope)} className={`doc-block ${selectedId === scope.id ? 'selected' : ''} ${dropTarget?.id === scope.id ? `drop-${dropTarget.position}` : ''}`} onClick={() => { onSelect(scope.id); onEditStart(scope.id); }}><span className="drag-handle">⠿</span>{editingId === scope.id ? editor(scope) : <><ReactMarkdown>{scopeHeading}</ReactMarkdown>{scopeSummary && <div className="doc-copy"><ReactMarkdown>{scopeSummary}</ReactMarkdown></div>}</>}</div>}
     {scopeChildren.flatMap((block) => block.id === 'thesis' && scopeId === 'launch' ? [renderBlock(block, 0, false), referenceSentence, insertAfter(block)] : [renderBlock(block)])}
   </article>;
 }
 
-export function BoardView({ blocks, messages, selectedId, onSelect, onStatus }: { blocks: DryvreBlock[]; messages: BlockMessage[]; selectedId: string; onSelect: (id: string) => void; onStatus: (id: string, status: TaskStatus) => void }) {
+export function BoardView({ blocks, messages, selectedId, draggedBlockId, onSelect, onStatus, onDragStart, onDragEnd }: { blocks: DryvreBlock[]; messages: BlockMessage[]; selectedId: string; draggedBlockId: string | null; onSelect: (id: string) => void; onStatus: (id: string, status: TaskStatus) => void; onDragStart: (id: string) => void; onDragEnd: () => void }) {
+  const [dropStatus, setDropStatus] = useState<TaskStatus | null>(null);
   const columns: { status: TaskStatus; label: string }[] = [{ status: 'todo', label: 'To do' }, { status: 'in_progress', label: 'In progress' }, { status: 'blocked', label: 'Blocked' }, { status: 'done', label: 'Done' }];
   return <div className="board">{columns.map((column) => {
     const cards = blocks.filter((block) => block.status === column.status);
-    return <section className="column" key={column.status}><header className="column-head"><span className="column-dot" />{column.label}<span>{cards.length}</span></header><div className="cards">{cards.map((block) => { const parent = block.parentId ? blocks.find((item) => item.id === block.parentId) : undefined; const summary = blockSummary(block); return <article className={`card ${selectedId === block.id ? 'selected' : ''}`} key={block.id} onClick={() => onSelect(block.id)}><div className="card-meta"><span>{parent ? blockTitle(parent) : 'Root'}</span><code>#{block.id.slice(0, 4).toUpperCase()}</code></div><h3>{blockTitle(block)}</h3>{summary && <p>{summary}</p>}<div className="card-footer"><span className={`mini-avatar ${block.author === 'Dryvre AI' ? 'agent' : ''}`}>{block.author === 'Dryvre AI' ? 'AI' : block.author.split(' ').map((part) => part[0]).join('').slice(0, 2)}</span><span className="comment-count">◉ {messages.filter((message) => message.parentId === block.id).length}</span><select aria-label={`Change status for ${blockTitle(block)}`} value={block.status} onClick={(event) => event.stopPropagation()} onChange={(event) => onStatus(block.id, event.target.value as TaskStatus)}>{columns.map((item) => <option value={item.status} key={item.status}>{item.label}</option>)}</select></div></article>; })}</div></section>;
+    return <section className={`column ${dropStatus === column.status ? 'status-drop' : ''}`} key={column.status} onDragOver={(event) => { if (!draggedBlockId) return; event.preventDefault(); event.dataTransfer.dropEffect = 'move'; setDropStatus(column.status); }} onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDropStatus(null); }} onDrop={(event) => { if (!draggedBlockId) return; event.preventDefault(); setDropStatus(null); onStatus(draggedBlockId, column.status); onDragEnd(); }}><header className="column-head"><span className="column-dot" />{column.label}<span>{cards.length}</span></header><div className="cards">{cards.map((block) => { const parent = block.parentId ? blocks.find((item) => item.id === block.parentId) : undefined; const summary = blockSummary(block); return <article draggable className={`card ${selectedId === block.id ? 'selected' : ''}`} key={block.id} onDragStart={(event) => { event.dataTransfer.effectAllowed = 'move'; event.dataTransfer.setData('text/plain', block.id); onDragStart(block.id); }} onDragEnd={() => { setDropStatus(null); onDragEnd(); }} onClick={() => onSelect(block.id)}><div className="card-meta"><span>{parent ? blockTitle(parent) : 'Root'}</span><code>#{block.id.slice(0, 4).toUpperCase()}</code></div><h3>{blockTitle(block)}</h3>{summary && <p>{summary}</p>}<div className="card-footer"><span className={`mini-avatar ${block.author === 'Dryvre AI' ? 'agent' : ''}`}>{block.author === 'Dryvre AI' ? 'AI' : block.author.split(' ').map((part) => part[0]).join('').slice(0, 2)}</span><span className="comment-count">◉ {messages.filter((message) => message.parentId === block.id).length}</span><select aria-label={`Change status for ${blockTitle(block)}`} value={block.status} onClick={(event) => event.stopPropagation()} onChange={(event) => onStatus(block.id, event.target.value as TaskStatus)}>{columns.map((item) => <option value={item.status} key={item.status}>{item.label}</option>)}</select></div></article>; })}</div></section>;
   })}</div>;
 }
 
