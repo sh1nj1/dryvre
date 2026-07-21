@@ -85,7 +85,11 @@ export function blockTitle(block: Pick<DryvreBlock, 'title' | 'bodyMd'>) {
 export function blockSummary(block: Pick<DryvreBlock, 'bodyMd'>) {
   const bodyMd = block.bodyMd ?? '';
   const { line, rest } = firstContentLine(bodyMd);
-  return ATX_HEADING.test(line) ? rest.trimStart() : bodyMd;
+  // Drop only the blank separator lines between the heading and the body, not
+  // the indentation of the first content line — a 4-space indent there is an
+  // indented code block that must survive so ReactMarkdown still renders it as
+  // code rather than plain text.
+  return ATX_HEADING.test(line) ? rest.replace(/^(?:[ \t]*\r?\n)+/, '') : bodyMd;
 }
 
 export function blockPath(blockId: string, blocks: DryvreBlock[]) {

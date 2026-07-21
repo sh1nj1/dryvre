@@ -57,4 +57,9 @@ describe('Markdown block projections', () => {
   it('accepts up to three leading spaces before a heading', () => {
     expect(blockTitle({ title: 'x', bodyMd: '   # Three space heading' })).toBe('Three space heading');
   });
+
+  it('preserves indentation of an indented code block after the heading', () => {
+    expect(blockSummary({ bodyMd: '# Example\n\n    const x = 1' })).toBe('    const x = 1');
+    expect(blockSummary({ bodyMd: '# T\n\n    a\n    b' })).toBe('    a\n    b');
+  });
 });
