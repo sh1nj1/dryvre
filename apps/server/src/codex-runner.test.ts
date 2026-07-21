@@ -3,8 +3,9 @@ import { execFileSync } from "node:child_process";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 import type { AppConfig } from "./config.js";
-import { buildManagedCodexConfig, checkCodexReadiness, executeProcess, killCodexProcessGroup, runCodex } from "./codex-runner.js";
+import { buildManagedCodexConfig, checkCodexReadiness, executeProcess, killCodexProcessGroup, resolveMcpEntry, runCodex } from "./codex-runner.js";
 
 const stockCodexAvailable = (() => {
   try {
@@ -63,6 +64,19 @@ describe("Codex runner", () => {
     expect(managedConfig).toContain('args = ["/tmp/dryvre mcp/index.js"]');
     expect(managedConfig).toContain('env_vars = ["DRYVRE_URL", "DRYVRE_SESSION"]');
     expect(managedConfig).not.toContain("dryvre_session=");
+  });
+
+  it.each(["apps/server/src/codex-runner.ts", "dist/server/codex-runner.js"])("resolves the default MCP build from %s", async (modulePath) => {
+    const repository = await fs.mkdtemp(path.join(os.tmpdir(), "dryvre-mcp-entry-"));
+    try {
+      const mcpEntry = path.join(repository, "dist/mcp/index.js");
+      const moduleUrl = pathToFileURL(path.join(repository, modulePath)).href;
+      await fs.mkdir(path.dirname(mcpEntry), { recursive: true });
+      await fs.writeFile(mcpEntry, "// built MCP entry\n");
+      await expect(resolveMcpEntry({ ...config, DRYVRE_AGENT_FAKE: false }, moduleUrl)).resolves.toBe(await fs.realpath(mcpEntry));
+    } finally {
+      await fs.rm(repository, { recursive: true, force: true });
+    }
   });
 
   it.skipIf(!stockCodexAvailable)("is consumed by the installed stock Codex CLI", async () => {

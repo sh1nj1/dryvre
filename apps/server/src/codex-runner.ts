@@ -7,6 +7,7 @@ import { promisify } from "node:util";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import type { AgentConfig, CompiledSkill } from "@dryvre/shared";
 import { isUnknownCodexSession, parseCodexJsonl } from "@dryvre/shared";
 import type { AppConfig } from "./config.js";
@@ -89,11 +90,24 @@ export function buildManagedCodexConfig(mcpEntry: string) {
   ].join("\n");
 }
 
-async function resolveMcpEntry(config: AppConfig) {
-  const configured = config.DRYVRE_AGENT_MCP_ENTRY ?? "dist/mcp/index.js";
-  return fs.realpath(path.resolve(configured)).catch(() => {
-    throw new Error("dryvre_mcp_not_built");
-  });
+function defaultMcpEntries(runtimeModuleUrl: string) {
+  return [
+    // Bundled server: dist/server/*.js -> dist/mcp/index.js
+    fileURLToPath(new URL("../mcp/index.js", runtimeModuleUrl)),
+    // Development source: apps/server/src/*.ts -> dist/mcp/index.js
+    fileURLToPath(new URL("../../../dist/mcp/index.js", runtimeModuleUrl)),
+  ];
+}
+
+export async function resolveMcpEntry(config: AppConfig, runtimeModuleUrl = import.meta.url) {
+  const candidates = config.DRYVRE_AGENT_MCP_ENTRY
+    ? [path.resolve(config.DRYVRE_AGENT_MCP_ENTRY)]
+    : defaultMcpEntries(runtimeModuleUrl);
+  for (const candidate of candidates) {
+    const resolved = await fs.realpath(candidate).catch(() => undefined);
+    if (resolved) return resolved;
+  }
+  throw new Error("dryvre_mcp_not_built");
 }
 
 async function materializeManagedConfig(codexHome: string, mcpEntry: string) {
