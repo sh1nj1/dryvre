@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import re
 import shutil
 import sys
@@ -13,13 +14,16 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 FORBIDDEN_SOURCE_PATH = re.compile(
-    r"(^|/)(node_modules(/|$)|\.env($|\.)|id_rsa|id_ed25519|.*\.(pem|p12)|"
+    r"(^|/)(node_modules(/|$)|(?:\.git|\.hg|\.svn|\.bzr)(/|$)|"
+    r"\.env(?:$|\.(?!(?:example|sample|template|dist)$)[^/]+$)|"
+    r"id_rsa|id_ed25519|.*\.(pem|p12)|"
     r"(?:private|secret|server|client|tls|ssl)[^/]*\.key$|"
     r"cookies?\.json$|\.npmrc$|\.yarnrc(?:\.yml)?$|\.pypirc$|\.netrc$|pip\.conf$|"
     r"auth\.toml$|credentials\.toml$|[^/]+\.(?:db|sqlite|sqlite3)(?:-(?:wal|shm))?$|"
     r"[^/]*(?:dump|backup)[^/]*\.sql$)",
     re.I,
 )
+VCS_DIRECTORIES = {".git", ".hg", ".svn", ".bzr"}
 
 
 def fail(message: str) -> None:
@@ -51,11 +55,27 @@ def sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
+def walk_source_entries(source: Path):
+    yield source
+    if not source.is_dir():
+        return
+    for directory, directory_names, file_names in os.walk(source, topdown=True, followlinks=False):
+        directory_names.sort()
+        file_names.sort()
+        kept_directories = []
+        for name in directory_names:
+            child = Path(directory) / name
+            if name.lower() in VCS_DIRECTORIES and not child.is_symlink():
+                continue
+            kept_directories.append(name)
+            yield child
+        directory_names[:] = kept_directories
+        for name in file_names:
+            yield Path(directory) / name
+
+
 def reject_forbidden_sources(source: Path, project_root: Path) -> None:
-    candidates = [source]
-    if source.is_dir():
-        candidates.extend(source.rglob("*"))
-    for candidate in candidates:
+    for candidate in walk_source_entries(source):
         relative = candidate.relative_to(project_root).as_posix()
         if FORBIDDEN_SOURCE_PATH.search(relative):
             fail(f"forbidden source path: {relative}")
@@ -83,7 +103,9 @@ def copy_declared(source: Path, destination: Path, output_root: Path) -> list[di
     if source.is_symlink():
         fail(f"symbolic links are not packaged: {source}")
     copied: list[dict] = []
-    for child in sorted(source.rglob("*")):
+    for child in walk_source_entries(source):
+        if child == source:
+            continue
         if child.is_symlink():
             fail(f"symbolic links are not packaged: {child}")
         if child.is_file():

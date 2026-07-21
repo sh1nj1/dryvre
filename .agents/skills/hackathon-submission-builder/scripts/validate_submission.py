@@ -17,13 +17,15 @@ import zipfile
 from pathlib import Path, PurePosixPath
 
 SECRET_PATH = re.compile(
-    r"(^|/)(\.env($|\.)|id_rsa|id_ed25519|.*\.(pem|p12)|"
+    r"(^|/)(\.env(?:$|\.(?!(?:example|sample|template|dist)$)[^/]+$)|"
+    r"id_rsa|id_ed25519|.*\.(pem|p12)|"
     r"(?:private|secret|server|client|tls|ssl)[^/]*\.key$|cookies?\.json$|"
     r"\.npmrc$|\.yarnrc(?:\.yml)?$|\.pypirc$|\.netrc$|pip\.conf$|auth\.toml$|credentials\.toml$)",
     re.I,
 )
 FORBIDDEN_PATH = re.compile(
-    r"((^|/)node_modules(/|$)|(^|/)[^/]+\.(?:db|sqlite|sqlite3)(?:-(?:wal|shm))?$|"
+    r"((^|/)node_modules(/|$)|(^|/)(?:\.git|\.hg|\.svn|\.bzr)(/|$)|"
+    r"(^|/)[^/]+\.(?:db|sqlite|sqlite3)(?:-(?:wal|shm))?$|"
     r"(^|/)[^/]*(?:dump|backup)[^/]*\.sql$)",
     re.I,
 )
