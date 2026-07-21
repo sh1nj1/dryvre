@@ -203,6 +203,8 @@ Agent별 managed Codex home은 `<data>/agent-runtime/<agent-block-id>/codex-home
 7. timeout/취소 시 프로세스 그룹에 `SIGTERM`, grace period 후 `SIGKILL`을 보낸다.
 8. 서버 재시작 시 `queued/running` run의 저장된 PID로 남은 detached process group을 종료한 뒤 run을 `failed/server_restarted`로 정리한다.
 
+해커톤 MVP의 재시작 정리는 저장된 PID의 프로세스 신원을 검증하지 않는다. Codex 종료 후 동일 부트에서도 PID가 재사용될 수 있고, Unix에서는 재사용된 PID가 서버 process-group ID와 같으면 서버 그룹을 대상으로 할 수 있다. 프로덕션에서는 boot identity와 process start time을 함께 저장하고 일치할 때만 signal을 보내야 한다.
+
 ## UI 수직 슬라이스
 
 새 전역 관리 화면 대신 기존 트리와 선택 패널을 확장한다.

@@ -81,9 +81,11 @@ export async function createAgentRuntime(
   const children = new Map<string, ChildProcessWithoutNullStreams>();
   const cancelled = new Set<string>();
   const activeAgents = new Set<string>();
-  // Hackathon MVP recovery assumes a server-process restart within the same host
-  // boot. A production worker must persist boot identity/process start time before
-  // trusting a recycled PID after a machine reboot.
+  // Hackathon MVP recovery trusts a persisted PID without proving process identity.
+  // PIDs can be reused after the Codex process exits, even within the same host boot;
+  // on Unix, a reused PID that is also the server's process-group ID could make the
+  // negative-PID kill target the server group. A production worker must persist and
+  // verify boot identity plus process start time before signalling the stored PID.
   // A hard crash between spawn() returning and the best-effort PID UPDATE below is
   // also unrecoverable here; closing that small window requires an external worker
   // supervisor or a launch protocol that persists identity before exec.

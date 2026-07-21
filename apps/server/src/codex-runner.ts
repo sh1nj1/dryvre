@@ -288,6 +288,9 @@ export function killCodexProcessGroup(
     // Negative PID targets the detached process group on Unix. Windows has no
     // equivalent here, so restart reconciliation terminates only the persisted
     // leader PID and may leave descendants for a platform supervisor to clean up.
+    // pid === process.pid prevents a direct self-kill, but cannot prove that a
+    // recycled PID is not the server's Unix process-group ID; callers recovering
+    // persisted PIDs must validate process identity in production.
     kill(process.platform === "win32" ? pid : -pid, signal);
     return true;
   } catch {
