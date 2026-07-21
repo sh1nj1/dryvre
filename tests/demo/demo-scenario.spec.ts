@@ -6,7 +6,8 @@ test('completes the PM approval Inbox Developer demo on the real server', async 
   await page.goto('/app');
 
   const sidebar = page.locator('.sidebar');
-  await expect(sidebar.getByRole('button', { name: /Inbox/ })).toBeVisible();
+  const inbox = page.locator('.top-actions').getByRole('button', { name: 'Inbox' });
+  await expect(inbox).toBeVisible();
   await expect(sidebar.getByText('Launch Dryvre', { exact: true })).toBeVisible();
   await sidebar.getByText('Launch Dryvre', { exact: true }).click();
 
@@ -23,7 +24,7 @@ test('completes the PM approval Inbox Developer demo on the real server', async 
   const blockedColumn = page.locator('.column').filter({ has: page.getByText('Blocked', { exact: true }) });
   await expect(blockedColumn.getByText('Publish and verify the Dryvre launch demo', { exact: true })).toBeVisible();
 
-  await sidebar.getByRole('button', { name: /Inbox/ }).click();
+  await inbox.click();
   const approval = page.locator('.message').filter({ hasText: 'Approval required' });
   await expect(approval).toBeVisible();
   // Answer through the documented Inbox reply UI, not a direct API call.

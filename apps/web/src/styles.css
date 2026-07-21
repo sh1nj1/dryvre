@@ -170,8 +170,22 @@ body.panel-resizing { cursor: col-resize; user-select: none; }
 .message-head { margin: 1px 0 7px; display: flex; align-items: center; gap: 8px; }
 .message-head strong { font-size: 12px; }
 .message-head span { color: #aaa79f; font-size: 10px; }
-.message-body { color: #4d504b; line-height: 1.65; font-size: 13px; }
+.message-body { min-width: 0; color: #4d504b; line-height: 1.65; font-size: 13px; overflow-wrap: anywhere; }
+.message-body > :first-child { margin-top: 0; }
+.message-body > :last-child { margin-bottom: 0; }
 .message-body p { margin: 0 0 7px; }
+.message-body h1, .message-body h2, .message-body h3, .message-body h4, .message-body h5, .message-body h6 { margin: 14px 0 6px; color: var(--ink); line-height: 1.35; }
+.message-body h1 { font-size: 18px; }
+.message-body h2 { font-size: 16px; }
+.message-body h3, .message-body h4, .message-body h5, .message-body h6 { font-size: 14px; }
+.message-body ul, .message-body ol { margin: 5px 0 9px; padding-left: 22px; }
+.message-body li + li { margin-top: 2px; }
+.message-body blockquote { margin: 8px 0; padding-left: 11px; border-left: 3px solid var(--line); color: var(--muted); }
+.message-body a { color: var(--violet); text-decoration-thickness: 1px; text-underline-offset: 2px; }
+.message-body code { padding: 1px 4px; border-radius: 4px; background: var(--soft-line); font: .92em/1.5 ui-monospace, SFMono-Regular, Consolas, monospace; }
+.message-body pre { max-width: 100%; margin: 8px 0; padding: 10px 12px; border-radius: 8px; overflow-x: auto; background: var(--ink); color: var(--panel); }
+.message-body pre code { padding: 0; background: transparent; color: inherit; font-size: 11px; }
+.message-body hr { margin: 12px 0; border: 0; border-top: 1px solid var(--line); }
 .message-actions { margin-top: 7px; color: var(--muted); font-size: 10px; opacity: .75; }
 .message-actions button { padding: 0; border: 0; color: inherit; background: transparent; font: inherit; }
 .agent-output { margin-top: 10px; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--panel); }
@@ -192,8 +206,9 @@ body.panel-resizing { cursor: col-resize; user-select: none; }
 .context-chip { padding: 5px 8px; border-radius: 6px; color: var(--violet); background: var(--violet-soft); font-size: 10px; }
 .send-btn { margin-left: auto; width: 31px; height: 31px; border: 0; border-radius: 8px; color: white; background: var(--ink); }
 .send-btn:disabled { opacity: .35; }
-.inbox-trigger { width: 100%; margin-top: 8px; padding: 9px 10px; border: 1px solid var(--line); border-radius: 8px; display: flex; gap: 9px; align-items: center; color: var(--ink); background: var(--panel); font-size: 11px; font-weight: 700; text-align: left; }
+.inbox-trigger { height: 34px; padding: 0 10px; border: 1px solid var(--line); border-radius: 9px; display: flex; gap: 7px; align-items: center; color: var(--ink); background: var(--panel); font-size: 11px; font-weight: 700; }
 .inbox-trigger span:first-child { color: var(--accent); }
+.inbox-trigger:hover { border-color: #bdbab0; transform: translateY(-1px); }
 .inbox-trigger.active { border-color: var(--accent); background: var(--accent-soft); }
 .activate-task { margin-top: 10px; padding: 7px 10px; border: 0; border-radius: 7px; color: white; background: var(--ink); font-size: 10px; font-weight: 700; }
 .message-reference { margin-top: 8px; padding: 6px 9px; border: 1px solid #d8d3ef; border-radius: 7px; color: var(--violet); background: var(--violet-soft); font-size: 10px; }
@@ -299,6 +314,8 @@ body.panel-resizing { cursor: col-resize; user-select: none; }
   .crumbs, .view-switcher { display: none; }
   .mobile-view-select { width: 118px; height: 34px; padding: 0 10px; display: block; border: 1px solid var(--line); border-radius: 9px; color: var(--ink); background: var(--panel); font-size: 12px; font-weight: 650; }
   .top-actions { padding: 0 10px; }
+  .inbox-trigger { width: 34px; padding: 0; justify-content: center; }
+  .inbox-trigger span:last-child { display: none; }
   .mobile-tree-btn { display: grid; }
   .context-rail { display: none; }
   .stream-host-rail { display: none; }

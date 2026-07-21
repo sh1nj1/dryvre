@@ -1,5 +1,53 @@
 import { expect, test } from '@playwright/test';
 
+test('keeps search full-width and opens Inbox from the topbar beside the avatar', async ({ page }) => {
+  const rootId = '00000000-0000-4000-8000-000000000010';
+  const inboxId = '00000000-0000-4000-8000-000000000110';
+  const questionId = '00000000-0000-4000-8000-000000000111';
+  const authorId = '00000000-0000-4000-8000-000000000001';
+  const createdAt = '2026-07-22T00:00:00.000Z';
+  const block = (id: string, parentId: string | null, rank: string | null, bodyMd: string) => ({
+    id,
+    parentId,
+    path: parentId ? `/${rootId}/${id}/` : `/${id}/`,
+    rank,
+    bodyMd,
+    status: null,
+    authorId,
+    version: 0,
+    createdAt,
+    updatedAt: createdAt,
+  });
+  const blocks = [
+    block(rootId, null, 'a', '# Workspace'),
+    block(inboxId, rootId, 'b', '# Inbox'),
+    block(questionId, inboxId, null, 'Approval required before publishing.'),
+  ];
+
+  await page.route('**/api/**', async (route) => {
+    const url = new URL(route.request().url());
+    if (url.pathname === `/api/trees/${rootId}`) return route.fulfill({ json: { blocks } });
+    if (url.pathname === '/api/me/inbox') return route.fulfill({ json: { subjectId: authorId, blockId: inboxId } });
+    return route.fulfill({ status: 404, json: { error: 'Not found' } });
+  });
+
+  await page.goto('/app');
+  const topActions = page.locator('.top-actions');
+  const inbox = topActions.getByRole('button', { name: 'Inbox' });
+  const search = page.getByRole('button', { name: /Search & filter/ });
+
+  await expect(topActions.locator('.inbox-trigger + .avatar')).toHaveCount(1);
+  await expect(page.locator('.side-tools .inbox-trigger')).toHaveCount(0);
+  await expect(search).toBeVisible();
+  expect((await search.boundingBox())!.width).toBeGreaterThan(200);
+
+  await inbox.click();
+  await expect(inbox).toHaveClass(/active/);
+  await expect(page.getByRole('tab', { name: /Stream/ })).toHaveAttribute('aria-selected', 'true');
+  await expect(page.locator('.stream-host-main')).toHaveAttribute('aria-label', 'Stream for Inbox');
+  await expect(page.getByText('Approval required before publishing.')).toBeVisible();
+});
+
 test('resizes all three desktop panels and gives the companion Stream a wider default', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.goto('/app');
@@ -123,6 +171,31 @@ test('sends from the companion Stream without leaving Document and keeps the new
   await expect(page.locator('.message')).toHaveCount(2);
   await expect(page.locator('.message').nth(0)).toContainText('Older message');
   await expect(page.locator('.message').nth(1)).toContainText('Newest message');
+});
+
+test('renders stream message bodies as safe Markdown', async ({ page }) => {
+  const rootId = '00000000-0000-4000-8000-000000000010';
+  const messageId = '00000000-0000-4000-8000-000000000011';
+  const authorId = '00000000-0000-4000-8000-000000000001';
+  const createdAt = '2026-07-22T00:00:00.000Z';
+  const root = { id: rootId, parentId: null, path: `/${rootId}/`, rank: 'a', bodyMd: '# Markdown stream', status: null, authorId, version: 0, createdAt, updatedAt: createdAt };
+  const message = { id: messageId, parentId: rootId, path: `/${rootId}/${messageId}/`, rank: null, bodyMd: '## Release notes\n\n**Ready** to ship with `npm test`.\n\n- Alpha\n- Beta\n\n[Documentation](https://example.com)\n\n<script>window.markdownExecuted = true</script>', status: null, authorId, version: 0, createdAt, updatedAt: createdAt };
+
+  await page.route('**/api/**', async (route) => {
+    const url = new URL(route.request().url());
+    if (url.pathname === `/api/trees/${rootId}`) return route.fulfill({ json: { blocks: [root, message] } });
+    return route.fulfill({ status: 404, json: { error: 'Not found' } });
+  });
+
+  await page.goto('/app');
+  const body = page.locator('.message-body');
+  await expect(body.getByRole('heading', { name: 'Release notes', level: 2 })).toBeVisible();
+  await expect(body.locator('strong')).toHaveText('Ready');
+  await expect(body.locator('li')).toHaveText(['Alpha', 'Beta']);
+  await expect(body.locator('code')).toHaveText('npm test');
+  await expect(body.getByRole('link', { name: 'Documentation' })).toHaveAttribute('href', 'https://example.com');
+  await expect(body.locator('script')).toHaveCount(0);
+  await expect(page.evaluate(() => (window as Window & { markdownExecuted?: boolean }).markdownExecuted)).resolves.toBeUndefined();
 });
 
 test('sends with Enter, keeps Shift+Enter for new lines, and ignores IME confirmation', async ({ page }) => {
