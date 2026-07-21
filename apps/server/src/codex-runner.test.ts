@@ -125,19 +125,15 @@ describe("Codex runner", () => {
   });
 
   it("settles the process promise when the child closes stdin early", async () => {
-    try {
-      const result = await executeProcess({
-        command: process.execPath,
-        args: ["-e", "process.stdin.destroy(); process.exit(1)"],
-        cwd: process.cwd(),
-        env: process.env,
-        prompt: "x".repeat(2 * 1024 * 1024),
-        timeoutMs: 1_000,
-        onSpawn: () => undefined,
-      });
-      expect(result.exitCode).not.toBe(0);
-    } catch (error) {
-      expect((error as NodeJS.ErrnoException).code).toBe("EPIPE");
-    }
+    const result = await executeProcess({
+      command: process.execPath,
+      args: ["-e", "process.stdin.destroy(); process.exit(1)"],
+      cwd: process.cwd(),
+      env: process.env,
+      prompt: "x".repeat(2 * 1024 * 1024),
+      timeoutMs: 1_000,
+      onSpawn: () => undefined,
+    });
+    expect(result.exitCode).not.toBe(0);
   });
 });
