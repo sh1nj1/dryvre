@@ -17,6 +17,8 @@ grant(block_id, subject_id, level)
 ref(from_block_id, to_block_id)
 op_log(id, actor_id, op, payload, created_at)
 subject(id, kind)
+subject_inbox(subject_id, block_id)
+agent_run(id, agent_subject_id, task_block_id, trigger_version, state, request_block_id?, created_at, updated_at)
 session(id, subject_id, expires_at)
 ```
 
@@ -27,6 +29,8 @@ session(id, subject_id, expires_at)
 - `status`가 `null`이면 태스크가 아니다.
 - 블록의 표현 종류는 별도 `kind` 컬럼 대신 `body_md`의 Markdown 접두사에서 파생한다.
 - `version`으로 동일 블록의 낙관적 동시 편집 충돌을 감지한다.
+- `subject_inbox`는 사용자 subject와 Inbox 역할을 맡은 블록을 각각 유일하게 연결한다. 사용자 생성 시 함께 만들고 연결된 동안에는 해당 블록을 삭제하거나 다른 사용자에게 다시 연결할 수 없다. Inbox의 내용은 별도 알림 행이 아니라 그 블록의 자식이다.
+- `agent_run`은 재시도와 중복 실행 방지를 위한 런타임 메타데이터다. 상태는 `checking`, `waiting_input`, `running`, `verifying`, `completed`, `failed`로 제한하고, 활성 질문이 있으면 `request_block_id`로 그 Inbox 블록을 가리킨다. 사용자에게 보이는 계획, 질문, 결과와 검증 근거는 블록에 저장한다.
 
 ## 뷰별 투영
 
@@ -37,6 +41,8 @@ session(id, subject_id, expires_at)
 ### 스트림 뷰
 
 현재 선택 블록에 연결된 스트림 블록을 `created_at` 순으로 표시한다. 새 메시지는 선택 블록의 자식 tail에 append한다. 답글은 메시지 블록의 자식이며 UI에서는 깊이 1을 우선 보여주고 더 깊은 답글을 접을 수 있다.
+
+사용자 Inbox를 선택한 경우에도 같은 스트림 투영을 사용한다. 에이전트의 질문 또는 승인 요청은 Inbox의 자식 블록이고, 원래 작업 블록을 `ref`한다. 사용자의 답변은 요청 블록의 자식이므로 요청과 응답의 상관관계를 위한 별도 메시지 테이블이 필요하지 않다.
 
 ### 보드·리스트 뷰
 
@@ -77,6 +83,21 @@ delete(id)
 
 `op_log`는 감사, 재생과 향후 실행 취소의 근거다. 별도 이벤트 버스나 큐를 초기 구조에 넣지 않는다.
 
+## 에이전트 실행 루프
+
+`setStatus(id, todo)`가 승인되면 같은 `op_log`를 에이전트 실행 트리거로 사용할 수 있다. 실행기는 해당 블록이나 그 작업 정의에 명시적으로 멘션된 실행 에이전트만 깨운다. 상태가 없는 초안, 에이전트가 지정되지 않은 작업과 이미 처리한 `(task_block_id, trigger_version)`은 실행하지 않는다.
+
+실행 순서는 다음과 같다.
+
+1. 작업 블록의 본문, 하위 블록과 명시적 참조에서 완료 계약을 읽는다.
+2. 결과물, 완료 조건, 제약과 검증 방법이 충분한지 확인한다.
+3. 부족하면 상태를 `todo`로 유지하고 `todo` 전이를 승인한 사용자의 Inbox에 `@사용자`와 작업 `ref`를 포함한 질문 블록을 만든다.
+4. 충분하면 기대 `version`을 조건으로 `todo → in_progress`를 원자적으로 적용한다. 선점에 실패한 실행은 종료한다.
+5. 실행 중 사용자 판단이나 외부 변경 승인이 필요하면 `in_progress`를 유지하고 같은 방식으로 Inbox에 요청한 뒤 답글을 기다린다.
+6. 결과물과 검증 근거를 작업의 자식 블록으로 기록하고 검증을 통과한 뒤에만 `in_progress → done`을 적용한다.
+
+질문에 답이 달리면 원래 요청 블록과 작업 `ref`를 통해 대기 중인 실행을 재개한다. 완료 조건 부족으로 아직 선점하지 않은 작업은 답변을 계약에 반영한 다음 다시 사전 검증한다. 상세 상태 및 실패 계약은 [에이전트 작업 루프](agent-loop-spec.md)를 따른다.
+
 ## 실시간 동기화와 충돌
 
 - WebSocket 연결은 클라이언트당 하나만 둔다.
@@ -96,7 +117,7 @@ AI 요청의 기본 컨텍스트는 다음을 합친다.
 2. 그 블록의 서브트리
 3. 그 블록이 명시적으로 참조한 블록
 
-모델 SDK를 직접 호출하고 출력은 현재 블록 아래의 새 블록으로 저장한다. LangChain류의 범용 조율 프레임워크나 에이전트 응답 전략 계층을 초기 범위에 두지 않는다.
+PM Agent는 사용자의 요청을 실행 가능한 작업 블록으로 구체화하고 Developer Agent는 명시적으로 지정된 `todo` 작업을 실행한다. 두 역할 모두 같은 컨텍스트 규칙과 블록 연산을 사용한다. 모델 SDK를 직접 호출하고 계획, 질문, 결과와 검증 근거를 블록으로 저장한다. LangChain류의 범용 조율 프레임워크는 초기 범위에 두지 않는다.
 
 ## 편집기 경계
 
