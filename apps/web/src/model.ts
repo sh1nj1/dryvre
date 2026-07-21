@@ -61,7 +61,7 @@ export interface DryvreDataSource {
 
 export function blockTitle(block: Pick<DryvreBlock, 'title' | 'bodyMd'>) {
   const firstLine = block.bodyMd?.trimStart().split('\n', 1)[0] ?? '';
-  const heading = firstLine.match(/^#{1,6}\s+(.+?)\s*#*$/);
+  const heading = firstLine.match(/^#{1,6}\s+(.+?)(?:\s+#+)?\s*$/);
   return heading?.[1]?.trim() || block.title;
 }
 

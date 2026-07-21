@@ -20,4 +20,14 @@ describe('Markdown block projections', () => {
 
     expect(blockSummary(block)).toBe('Details');
   });
+
+  it('keeps a trailing hash that is part of the heading text', () => {
+    expect(blockTitle({ title: 'x', bodyMd: '# Learn C#' })).toBe('Learn C#');
+    expect(blockTitle({ title: 'x', bodyMd: '# foo#bar' })).toBe('foo#bar');
+  });
+
+  it('strips a spaced closing hash sequence with trailing whitespace', () => {
+    expect(blockTitle({ title: 'x', bodyMd: '# Plan ###   ' })).toBe('Plan');
+    expect(blockTitle({ title: 'x', bodyMd: '# foo #' })).toBe('foo');
+  });
 });
