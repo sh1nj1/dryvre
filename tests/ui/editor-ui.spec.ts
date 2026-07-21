@@ -254,3 +254,103 @@ test('recovers to Message mode when navigating from an agent to a non-target blo
   await expect(page.getByRole('button', { name: 'Send message' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Run Agent' })).toHaveCount(0);
 });
+
+test('keeps observing an agent run after leaving the Stream view', async ({ page }) => {
+  const rootId = '00000000-0000-4000-8000-000000000010';
+  const targetId = '00000000-0000-4000-8000-000000000011';
+  const productId = '00000000-0000-4000-8000-000000000020';
+  const resultId = '00000000-0000-4000-8000-000000000090';
+  const runId = '00000000-0000-4000-8000-000000000080';
+  const createdAt = new Date('2026-07-21T00:00:00.000Z').toISOString();
+  const block = (id: string, parentId: string | null, path: string, rank: string | null, bodyMd: string, authorId = '00000000-0000-4000-8000-000000000001') => ({ id, parentId, path, rank, bodyMd, status: null, authorId, version: 0, createdAt, updatedAt: createdAt });
+  const blocks = [
+    block(rootId, null, `/${rootId}/`, 'a', '# Dryvre'),
+    block(targetId, rootId, `/${rootId}/${targetId}/`, 'a', '# Demo target'),
+    block(productId, rootId, `/${rootId}/${productId}/`, 'b', '# @agent product-engineer\nImplement focused changes.'),
+    block('00000000-0000-4000-8000-000000000021', productId, `/${rootId}/${productId}/config/`, 'a', '```agent-config\n{"workspace":"dryvre"}\n```'),
+  ];
+  let pollCount = 0;
+  let includeResult = false;
+  await page.route('**/api/**', async (route) => {
+    const request = route.request();
+    const url = new URL(request.url());
+    if (url.pathname === `/api/trees/${rootId}`) {
+      const result = includeResult ? [block(resultId, targetId, `/${rootId}/${targetId}/${resultId}/`, null, '## Demo Agent Result\n\nImplemented and verified.', '00000000-0000-4000-8000-000000000099')] : [];
+      return route.fulfill({ json: { blocks: [...blocks, ...result] } });
+    }
+    if (url.pathname === '/api/agents/readiness') return route.fulfill({ json: { ready: true, mode: 'fake', version: 'fake' } });
+    if (/^\/api\/agents\/.+\/validate$/.test(url.pathname)) return route.fulfill({ json: { valid: true, agent: { slug: 'demo' }, skills: [] } });
+    if (url.pathname === '/api/agent-runs' && request.method() === 'POST') return route.fulfill({ status: 202, json: { id: runId, agentBlockId: productId, targetBlockId: targetId, requestedBy: '00000000-0000-4000-8000-000000000001', status: 'queued', codexSessionId: null, startedAt: null, finishedAt: null, errorCode: null } });
+    if (url.pathname === `/api/agent-runs/${runId}` && request.method() === 'GET') {
+      pollCount += 1;
+      const status = pollCount > 1 ? 'succeeded' : 'running';
+      if (status === 'succeeded') includeResult = true;
+      return route.fulfill({ json: { id: runId, agentBlockId: productId, targetBlockId: targetId, requestedBy: '00000000-0000-4000-8000-000000000001', status, codexSessionId: status === 'succeeded' ? 'fake-thread' : null, startedAt: createdAt, finishedAt: status === 'succeeded' ? createdAt : null, errorCode: null } });
+    }
+    return route.fulfill({ status: 404, json: { error: 'Not found' } });
+  });
+
+  await page.goto('/');
+  await page.locator('.tree-row').filter({ hasText: 'Demo target' }).click();
+  await page.getByRole('tab', { name: /Stream/ }).click();
+  await page.getByLabel('Send as').selectOption(productId);
+  await page.getByPlaceholder('Write to this block… Use @ to mention people, agents, or blocks').fill('Implement the demo flow.');
+  await page.getByRole('button', { name: 'Run Agent' }).click();
+
+  // Leave the Stream view before the run finishes; the observer must stay mounted and still complete it.
+  await page.getByRole('tab', { name: /Board/ }).click();
+  await expect(page.getByText('Implemented and verified.')).toBeVisible();
+  await expect(page.locator('.message.result-focus')).toBeVisible();
+});
+
+test('keeps message send and cancel available for an in-flight run off its target', async ({ page }) => {
+  const rootId = '00000000-0000-4000-8000-000000000010';
+  const targetId = '00000000-0000-4000-8000-000000000011';
+  const productId = '00000000-0000-4000-8000-000000000020';
+  const runId = '00000000-0000-4000-8000-000000000080';
+  const createdAt = new Date('2026-07-21T00:00:00.000Z').toISOString();
+  const block = (id: string, parentId: string | null, path: string, rank: string | null, bodyMd: string) => ({ id, parentId, path, rank, bodyMd, status: null, authorId: '00000000-0000-4000-8000-000000000001', version: 0, createdAt, updatedAt: createdAt });
+  const blocks = [
+    block(rootId, null, `/${rootId}/`, 'a', '# Dryvre'),
+    block(targetId, rootId, `/${rootId}/${targetId}/`, 'a', '# Demo target'),
+    block(productId, rootId, `/${rootId}/${productId}/`, 'b', '# @agent product-engineer\nImplement focused changes.'),
+    block('00000000-0000-4000-8000-000000000021', productId, `/${rootId}/${productId}/config/`, 'a', '```agent-config\n{"workspace":"dryvre"}\n```'),
+  ];
+  let cancelled = false;
+  await page.route('**/api/**', async (route) => {
+    const request = route.request();
+    const url = new URL(request.url());
+    if (url.pathname === `/api/trees/${rootId}`) return route.fulfill({ json: { blocks } });
+    if (url.pathname === '/api/agents/readiness') return route.fulfill({ json: { ready: true, mode: 'fake', version: 'fake' } });
+    if (/^\/api\/agents\/.+\/validate$/.test(url.pathname)) return route.fulfill({ json: { valid: true, agent: { slug: 'demo' }, skills: [] } });
+    if (url.pathname === '/api/agent-runs' && request.method() === 'POST') return route.fulfill({ status: 202, json: { id: runId, agentBlockId: productId, targetBlockId: targetId, requestedBy: '00000000-0000-4000-8000-000000000001', status: 'queued', codexSessionId: null, startedAt: null, finishedAt: null, errorCode: null } });
+    if (url.pathname === `/api/agent-runs/${runId}/cancel`) { cancelled = true; return route.fulfill({ json: { id: runId, agentBlockId: productId, targetBlockId: targetId, requestedBy: '00000000-0000-4000-8000-000000000001', status: 'cancelled', codexSessionId: null, startedAt: createdAt, finishedAt: createdAt, errorCode: 'cancelled' } }); }
+    if (url.pathname === `/api/agent-runs/${runId}` && request.method() === 'GET') {
+      const status = cancelled ? 'cancelled' : 'running';
+      return route.fulfill({ json: { id: runId, agentBlockId: productId, targetBlockId: targetId, requestedBy: '00000000-0000-4000-8000-000000000001', status, codexSessionId: null, startedAt: createdAt, finishedAt: cancelled ? createdAt : null, errorCode: cancelled ? 'cancelled' : null } });
+    }
+    return route.fulfill({ status: 404, json: { error: 'Not found' } });
+  });
+
+  await page.goto('/');
+  await page.locator('.tree-row').filter({ hasText: 'Demo target' }).click();
+  await page.getByRole('tab', { name: /Stream/ }).click();
+  await page.getByLabel('Send as').selectOption(productId);
+  await page.getByPlaceholder('Write to this block… Use @ to mention people, agents, or blocks').fill('Long running task.');
+  await page.getByRole('button', { name: 'Run Agent' }).click();
+  await expect(page.locator('.run-state')).toBeVisible();
+
+  // Navigate to the @agent block (a non-target) while the run is still in flight.
+  await page.locator('.tree-row').filter({ hasText: '@agent product-engineer' }).click();
+
+  // The composer recovers to Message mode, but the in-flight run stays observable:
+  // a normal message can still be sent, and the run can still be cancelled.
+  const sendButton = page.getByRole('button', { name: 'Send message' });
+  await expect(sendButton).toBeVisible();
+  await page.getByPlaceholder('Write to this block… Use @ to mention people, agents, or blocks').fill('A normal message.');
+  await expect(sendButton).toBeEnabled();
+  const cancelButton = page.getByRole('button', { name: 'Cancel' });
+  await expect(cancelButton).toBeVisible();
+  await cancelButton.click();
+  await expect(cancelButton).toHaveCount(0);
+});
