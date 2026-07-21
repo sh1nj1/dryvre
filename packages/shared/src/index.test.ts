@@ -1,5 +1,19 @@
 import { describe, expect, it } from 'vitest';
-import { blockOpSchema, deriveBlockKind } from './index.js';
+import { blockOpSchema, compileSkills, deriveBlockKind, parseAgentDefinition, parseBlockDirective, parseCodexJsonl, sortBlocksInDocumentOrder, type Block } from './index.js';
+
+const baseBlock = (overrides: Partial<Block>): Block => ({
+  id: crypto.randomUUID(),
+  parentId: null,
+  path: '/',
+  rank: 'a',
+  bodyMd: '',
+  status: null,
+  authorId: crypto.randomUUID(),
+  version: 0,
+  createdAt: new Date().toISOString(),
+  updatedAt: new Date().toISOString(),
+  ...overrides,
+});
 
 describe('shared block contract', () => {
   it('derives presentation from markdown instead of storing a kind', () => {
@@ -9,5 +23,104 @@ describe('shared block contract', () => {
 
   it('rejects unknown operations', () => {
     expect(blockOpSchema.safeParse({ type: 'archive', id: crypto.randomUUID() }).success).toBe(false);
+  });
+
+  it('rejects block bodies above the shared protocol limit', () => {
+    expect(blockOpSchema.safeParse({ type: 'create', parentId: null, bodyMd: 'x'.repeat(100_001), stream: true }).success).toBe(false);
+  });
+});
+
+describe("agent and skill contracts", () => {
+  it("parses an Agent with a strict config child", () => {
+    const agent = baseBlock({
+      bodyMd: "# @agent engineer\nImplement focused changes.",
+      path: "/agent/",
+    });
+    const config = baseBlock({
+      parentId: agent.id,
+      path: "/agent/config/",
+      bodyMd:
+        '```agent-config\n{"workspace":"dryvre","reasoningEffort":"medium"}\n```',
+    });
+    expect(parseBlockDirective(agent.bodyMd)).toEqual({
+      kind: "agent",
+      slug: "engineer",
+    });
+    expect(parseAgentDefinition(agent, [config])).toMatchObject({
+      slug: "engineer",
+      config: { workspace: "dryvre" },
+    });
+  });
+
+  it("compiles nested Skill blocks without folding child Skill prose into the parent", () => {
+    const collection = baseBlock({ path: "/skills/" });
+    const parent = baseBlock({
+      parentId: collection.id,
+      path: "/skills/release/",
+      bodyMd: "# @skill release\nRun release checks.",
+    });
+    const script = baseBlock({
+      parentId: parent.id,
+      path: "/skills/release/script/",
+      bodyMd: "```file:scripts/check.sh\nnpm test\n```",
+    });
+    const nested = baseBlock({
+      parentId: parent.id,
+      path: "/skills/release/docs/",
+      bodyMd: "# @skill docs\nReview documentation.",
+    });
+    const compiled = compileSkills(
+      [collection, parent, script, nested],
+      [collection.id],
+    );
+    expect(compiled.map((skill) => skill.slug)).toEqual(["release", "docs"]);
+    expect(compiled[0]?.skillMd).not.toContain("Review documentation");
+    expect(compiled[0]?.files).toEqual([
+      { path: "scripts/check.sh", content: "npm test" },
+    ]);
+  });
+
+  it("sorts shuffled blocks in tree and sibling rank order", () => {
+    const root = baseBlock({ id: "00000000-0000-4000-8000-000000000001", path: "/root/", rank: "a" });
+    const later = baseBlock({ id: "00000000-0000-4000-8000-000000000002", parentId: root.id, path: "/root/later/", rank: "b" });
+    const earlier = baseBlock({ id: "00000000-0000-4000-8000-000000000003", parentId: root.id, path: "/root/earlier/", rank: "a" });
+    const nested = baseBlock({ id: "00000000-0000-4000-8000-000000000004", parentId: earlier.id, path: "/root/earlier/nested/", rank: "a" });
+    expect(sortBlocksInDocumentOrder([later, nested, root, earlier]).map((block) => block.id)).toEqual([
+      root.id,
+      earlier.id,
+      nested.id,
+      later.id,
+    ]);
+  });
+
+  it("rejects path traversal in Skill files", () => {
+    const skill = baseBlock({
+      path: "/skill/",
+      bodyMd: "# @skill unsafe\nUnsafe fixture.",
+    });
+    const file = baseBlock({
+      parentId: skill.id,
+      path: "/skill/file/",
+      bodyMd: "```file:../secret\nnope\n```",
+    });
+    expect(() => compileSkills([skill, file], [skill.id])).toThrow(
+      "Unsafe Skill file path",
+    );
+  });
+
+  it("parses Codex JSONL session, final output, usage and failures", () => {
+    const parsed = parseCodexJsonl(
+      [
+        '{"type":"thread.started","thread_id":"thread-1"}',
+        '{"type":"item.completed","item":{"type":"agent_message","text":"Done"}}',
+        '{"type":"turn.completed","usage":{"input_tokens":12,"cached_input_tokens":3,"output_tokens":5}}',
+      ].join("\n"),
+    );
+    expect(parsed).toEqual({
+      sessionId: "thread-1",
+      summary: "Done",
+      errorMessage: null,
+      usage: { inputTokens: 12, cachedInputTokens: 3, outputTokens: 5 },
+    });
   });
 });

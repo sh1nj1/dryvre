@@ -2,18 +2,51 @@ import { randomUUID } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import OpenAI from 'openai';
 import { z } from 'zod';
-import { blockOpSchema, opEnvelopeSchema } from '@dryvre/shared';
+import { blockOpSchema, createAgentRunSchema, opEnvelopeSchema } from '@dryvre/shared';
 import type { DryvreDatabase } from '@dryvre/db';
 import type { AppConfig } from './config.js';
 import { applyOperation, getAiContext, getSubtree } from './block-service.js';
 import { requireActor } from './auth.js';
+import type { AgentRuntime } from './agent-runtime.js';
 
 const treeParams = z.object({ id: z.string().uuid() });
 const treeQuery = z.object({ q: z.string().optional() });
 const aiBody = z.object({ blockId: z.string().uuid(), prompt: z.string().min(1).max(20_000) });
+const blockIdParams = z.object({ blockId: z.string().uuid() });
+const runIdParams = z.object({ id: z.string().uuid() });
 
-export function registerRoutes(app: FastifyInstance, db: DryvreDatabase, config: AppConfig, publish: (message: unknown) => void) {
+export function registerRoutes(app: FastifyInstance, db: DryvreDatabase, config: AppConfig, publish: (message: unknown) => void, agentRuntime: AgentRuntime) {
   app.get('/api/health', async () => ({ ok: true }));
+  app.get('/api/agents/readiness', async () => agentRuntime.readiness());
+
+  app.post('/api/agents/:blockId/validate', async (request, reply) => {
+    try { return await agentRuntime.validate(blockIdParams.parse(request.params).blockId); }
+    catch (error) { return reply.code(422).send({ error: error instanceof Error ? error.message : 'Invalid Agent' }); }
+  });
+
+  app.get('/api/agents/:blockId/skills', async (request, reply) => {
+    try { return await agentRuntime.validate(blockIdParams.parse(request.params).blockId); }
+    catch (error) { return reply.code(422).send({ error: error instanceof Error ? error.message : 'Invalid Agent' }); }
+  });
+
+  app.post('/api/agent-runs', async (request, reply) => {
+    const input = createAgentRunSchema.parse(request.body);
+    try { return reply.code(202).send(await agentRuntime.start(input, await requireActor(request))); }
+    catch (error) {
+      const message = error instanceof Error ? error.message : 'Could not start Agent';
+      return reply.code(message === 'agent_busy' || message === 'runner_busy' ? 409 : 422).send({ error: message });
+    }
+  });
+
+  app.get('/api/agent-runs/:id', async (request, reply) => {
+    const run = await agentRuntime.get(runIdParams.parse(request.params).id);
+    return run ?? reply.code(404).send({ error: 'Agent run not found' });
+  });
+
+  app.post('/api/agent-runs/:id/cancel', async (request, reply) => {
+    const run = await agentRuntime.cancel(runIdParams.parse(request.params).id);
+    return run ?? reply.code(404).send({ error: 'Agent run not found' });
+  });
 
   app.get('/api/trees/:id', async (request, reply) => {
     const { id } = treeParams.parse(request.params);

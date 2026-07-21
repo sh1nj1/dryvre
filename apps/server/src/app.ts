@@ -10,6 +10,7 @@ import type { AppConfig } from './config.js';
 import { registerAuth } from './auth.js';
 import { registerLive } from './live.js';
 import { registerRoutes } from './routes.js';
+import { createAgentRuntime } from './agent-runtime.js';
 
 export async function buildApp(config: AppConfig) {
   const database = createDatabase(config.DATABASE_URL);
@@ -20,7 +21,8 @@ export async function buildApp(config: AppConfig) {
   await app.register(websocket);
   registerAuth(app, database.db, config);
   const publish = registerLive(app, database.db);
-  registerRoutes(app, database.db, config, publish);
+  const agentRuntime = await createAgentRuntime(database.db, config, publish);
+  registerRoutes(app, database.db, config, publish, agentRuntime);
 
   if (config.NODE_ENV === 'production') {
     const webRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../web');
@@ -28,6 +30,9 @@ export async function buildApp(config: AppConfig) {
     app.setNotFoundHandler((request, reply) => request.url.startsWith('/api/') ? reply.code(404).send({ error: 'Not found' }) : reply.sendFile('index.html'));
   }
 
-  app.addHook('onClose', () => database.close());
+  app.addHook('onClose', async () => {
+    await agentRuntime.close();
+    await database.close();
+  });
   return app;
 }

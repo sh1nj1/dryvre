@@ -22,7 +22,6 @@
   --sidebar: 264px;
   --context: 304px;
 }
-
 * { box-sizing: border-box; }
 html, body, #root { height: 100%; }
 body { margin: 0; min-width: 320px; overflow: hidden; background: radial-gradient(circle at 85% 4%, rgba(228, 90, 54, .09), transparent 24%), var(--paper); font-size: 14px; }
@@ -206,6 +205,24 @@ main { min-width: 0; min-height: 0; display: flex; flex-direction: column; backg
 .search-scope { margin-top: 12px; padding: 10px 11px; border-radius: 9px; display: flex; align-items: center; gap: 9px; color: #6158a3; background: var(--violet-soft); font-size: 10px; }
 .search-dialog-foot { padding: 11px 17px; border-top: 1px solid var(--line); display: flex; align-items: center; color: var(--muted); background: #faf9f4; font-size: 10px; }
 .primary-btn { height: 32px; margin-left: auto; padding: 0 12px; border: 0; color: white; background: var(--ink); font-size: 9px; font-weight: 700; }
+
+
+.agent-composer { margin-top: 9px; }
+.agent-toolbar { display: flex; align-items: center; gap: 8px; }
+.agent-toolbar select { min-width: 0; flex: 1; padding: 7px; border: 1px solid var(--line); border-radius: 7px; background: var(--panel); font-size: 10px; }
+.agent-toolbar span { color: var(--muted); font-size: 9px; }
+.agent-target { margin-top: 7px; display: flex; align-items: center; gap: 7px; color: var(--muted); font-size: 9px; }
+.agent-target select { min-width: 0; flex: 1; padding: 6px; border: 1px solid var(--line); border-radius: 7px; background: var(--panel); font-size: 9px; }
+.agent-composer .composer { position: static; margin-top: 7px; }
+.run-state { margin-top: 7px; display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 10px; }
+.run-state i { width: 7px; height: 7px; border-radius: 50%; background: #aaa; }
+.run-running i, .run-queued i { background: var(--yellow); animation: pulse 1s infinite alternate; }
+.run-succeeded i { background: var(--green); }
+.run-failed i, .run-cancelled i { background: var(--accent); }
+.run-state small { margin-left: auto; }
+.run-state button { margin-left: auto; border: 0; color: var(--accent); background: transparent; font-size: 9px; }
+.agent-error { margin-top: 8px; padding: 8px; border-radius: 7px; color: #8f3d2c; background: var(--accent-soft); font-size: 9px; line-height: 1.4; }
+@keyframes pulse { to { opacity: .35; } }
 
 @media (max-width: 1100px) {
   :root { --sidebar: 230px; --context: 270px; }

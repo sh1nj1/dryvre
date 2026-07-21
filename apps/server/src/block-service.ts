@@ -3,6 +3,8 @@ import { and, asc, eq, like, or, sql } from 'drizzle-orm';
 import { blocks, opLog, refs, type DryvreDatabase } from '@dryvre/db';
 import type { Block, BlockOp, OpEnvelope } from '@dryvre/shared';
 
+export type DryvreTransaction = Parameters<Parameters<DryvreDatabase['transaction']>[0]>[0];
+
 function serializeBlock(row: typeof blocks.$inferSelect): Block {
   return {
     id: row.id,
@@ -29,13 +31,13 @@ export async function getSubtree(db: DryvreDatabase, rootId: string, query?: str
   return rows.map(serializeBlock);
 }
 
-async function assertVersion(tx: Parameters<Parameters<DryvreDatabase['transaction']>[0]>[0], id: string, version?: number) {
+async function assertVersion(tx: DryvreTransaction, id: string, version?: number) {
   if (version === undefined) return;
   const current = await tx.select({ version: blocks.version }).from(blocks).where(eq(blocks.id, id)).limit(1);
   if (current[0]?.version !== version) throw new Error(`Block ${id} changed on the server`);
 }
 
-async function applyMutation(tx: Parameters<Parameters<DryvreDatabase['transaction']>[0]>[0], op: BlockOp, actorId: string) {
+async function applyMutation(tx: DryvreTransaction, op: BlockOp, actorId: string) {
   const now = new Date();
   switch (op.type) {
     case 'create': {
@@ -79,16 +81,18 @@ async function applyMutation(tx: Parameters<Parameters<DryvreDatabase['transacti
   }
 }
 
+export async function applyOperationInTransaction(tx: DryvreTransaction, envelope: OpEnvelope, actorId: string) {
+  const existing = await tx.query.opLog.findFirst({ where: and(eq(opLog.clientOpId, envelope.clientOpId), eq(opLog.actorId, actorId)) });
+  if (existing) return { sequence: existing.sequence, op: existing.payload as BlockOp };
+  const [logged] = await tx.insert(opLog).values({ clientOpId: envelope.clientOpId, actorId, op: envelope.op.type, payload: envelope.op }).returning({ sequence: opLog.sequence });
+  await applyMutation(tx, envelope.op, actorId);
+  if (!logged) throw new Error('Could not append operation log');
+  await tx.execute(sql`select pg_notify('dryvre_ops', ${JSON.stringify({ sequence: logged.sequence, actorId })})`);
+  return { sequence: logged.sequence, op: envelope.op };
+}
+
 export async function applyOperation(db: DryvreDatabase, envelope: OpEnvelope, actorId: string) {
-  return db.transaction(async (tx) => {
-    const existing = await tx.query.opLog.findFirst({ where: and(eq(opLog.clientOpId, envelope.clientOpId), eq(opLog.actorId, actorId)) });
-    if (existing) return { sequence: existing.sequence, op: existing.payload as BlockOp };
-    const [logged] = await tx.insert(opLog).values({ clientOpId: envelope.clientOpId, actorId, op: envelope.op.type, payload: envelope.op }).returning({ sequence: opLog.sequence });
-    await applyMutation(tx, envelope.op, actorId);
-    if (!logged) throw new Error('Could not append operation log');
-    await tx.execute(sql`select pg_notify('dryvre_ops', ${JSON.stringify({ sequence: logged.sequence, actorId })})`);
-    return { sequence: logged.sequence, op: envelope.op };
-  });
+  return db.transaction((tx) => applyOperationInTransaction(tx, envelope, actorId));
 }
 
 export async function getAiContext(db: DryvreDatabase, blockId: string) {

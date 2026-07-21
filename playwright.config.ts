@@ -15,6 +15,7 @@ export default defineConfig({
   ],
   webServer: {
     command: 'npm run dev -w @dryvre/web -- --host 127.0.0.1',
+    env: { VITE_MOCK_DATA_ONLY: 'true' },
     url: 'http://127.0.0.1:5173',
     reuseExistingServer: !process.env.CI,
   },
