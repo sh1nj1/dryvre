@@ -84,17 +84,15 @@ export function usePanelLayout(view: ViewMode) {
     return () => window.removeEventListener('resize', updateViewport);
   }, []);
 
-  // Persist only user-driven changes. The initial `widths` is viewport-derived
-  // (defaults() falls back to compact values at <=1100px, and resizers are hidden
-  // below 850px), so writing it on mount would store a value the user never chose
-  // and later mask the desktop defaults. `widths` only mutates through the
-  // resize/reset handlers below, so skipping the first run persists preferences only.
-  const persisted = useRef(false);
+  // Persist only user-initiated changes. The initial `widths` is viewport-derived
+  // (defaults() falls back to compact values at <=1100px, where resizers are also
+  // hidden below 850px), so persisting it on mount would store a value the user
+  // never chose and later mask the desktop defaults. `touched` flips only inside the
+  // resize/reset handlers, so this writes real preferences and never the fallback —
+  // and stays correct under StrictMode's double-invoked mount effect.
+  const touched = useRef(false);
   useEffect(() => {
-    if (!persisted.current) {
-      persisted.current = true;
-      return;
-    }
+    if (!touched.current) return;
     localStorage.setItem(STORAGE_KEY, JSON.stringify(widths));
   }, [widths]);
 
@@ -105,10 +103,22 @@ export function usePanelLayout(view: ViewMode) {
     leftMax,
     rightMin,
     rightMax,
-    setLeft: (left: number) => setWidths((current) => ({ ...current, left: clamp(left, LEFT_MIN, leftMax) })),
-    setRight: (right: number) => setWidths((current) => ({ ...current, [rightKey]: clamp(right, rightMin, rightMax) })),
-    resetLeft: () => setWidths((current) => ({ ...current, left: defaults(viewportWidth).left })),
-    resetRight: () => setWidths((current) => ({ ...current, [rightKey]: defaults(viewportWidth)[rightKey] })),
+    setLeft: (left: number) => {
+      touched.current = true;
+      setWidths((current) => ({ ...current, left: clamp(left, LEFT_MIN, leftMax) }));
+    },
+    setRight: (right: number) => {
+      touched.current = true;
+      setWidths((current) => ({ ...current, [rightKey]: clamp(right, rightMin, rightMax) }));
+    },
+    resetLeft: () => {
+      touched.current = true;
+      setWidths((current) => ({ ...current, left: defaults(viewportWidth).left }));
+    },
+    resetRight: () => {
+      touched.current = true;
+      setWidths((current) => ({ ...current, [rightKey]: defaults(viewportWidth)[rightKey] }));
+    },
   };
 }
 
