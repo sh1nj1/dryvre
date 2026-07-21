@@ -550,3 +550,33 @@ test('resolves a reference-style link in a heading whose definition lives in the
   await expect(heading.getByRole('link', { name: 'spec' })).toHaveAttribute('href', 'https://example.com');
   await expect(heading).not.toContainText('][');
 });
+
+test('resolves a multiline reference definition in a heading link', async ({ page }) => {
+  const rootId = '00000000-0000-4000-8000-000000000010';
+  const authorId = '00000000-0000-4000-8000-000000000001';
+  // CommonMark allows the destination on a line after the colon; the isolated
+  // heading projection must carry this multiline definition along verbatim.
+  const root = {
+    id: rootId,
+    parentId: null,
+    path: `/${rootId}/`,
+    rank: 'a',
+    bodyMd: '# See the [spec][s]\n\nShip when green.\n\n[s]:\n  https://example.com',
+    status: null,
+    authorId,
+    version: 0,
+    createdAt: '2026-07-22T00:00:00.000Z',
+    updatedAt: '2026-07-22T00:00:00.000Z',
+  };
+
+  await page.route('**/api/**', async (route) => {
+    const url = new URL(route.request().url());
+    if (url.pathname === `/api/trees/${rootId}`) return route.fulfill({ json: { blocks: [root] } });
+    return route.fulfill({ status: 404, json: { error: 'Not found' } });
+  });
+
+  await page.goto('/');
+  const heading = page.locator('.doc-sheet h1').first();
+  await expect(heading.getByRole('link', { name: 'spec' })).toHaveAttribute('href', 'https://example.com');
+  await expect(heading).not.toContainText('][');
+});

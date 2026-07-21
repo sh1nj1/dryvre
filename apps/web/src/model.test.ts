@@ -107,6 +107,11 @@ describe('Markdown block projections', () => {
     );
     // A bare `[s]:` with no destination is not a definition and is not carried.
     expect(headingMarkdown({ title: 'x', bodyMd: '# [Spec][s]\n\n[s]:' })).toBe('# [Spec][s]');
+    // CommonMark allows the label, colon, and destination to span multiple lines
+    // (`[s]:\n  dest`); the parser recognizes it, so it is carried verbatim.
+    expect(
+      headingMarkdown({ title: 'x', bodyMd: '# [Spec][s]\n\n[s]:\n  https://example.com' }),
+    ).toBe('# [Spec][s]\n\n[s]:\n  https://example.com');
   });
 
   it('does not lift reference definitions out of fenced code blocks', () => {

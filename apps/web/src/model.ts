@@ -1,3 +1,4 @@
+import { fromMarkdown } from 'mdast-util-from-markdown';
 import type { BlockStatus } from '@dryvre/shared';
 
 export type ViewMode = 'document' | 'board' | 'stream';
@@ -100,40 +101,34 @@ export function blockSummary(block: Pick<DryvreBlock, 'bodyMd'>) {
   return ATX_HEADING.test(line) ? rest.replace(/^(?:[ \t]*\r?\n)+/, '') : bodyMd;
 }
 
-// A single-line CommonMark link reference definition (`[label]: dest "title"`),
-// with up to 3 leading spaces (4+ is indented code). These render to nothing but
-// supply targets for reference-style links. The whitespace after the colon is
-// optional (`[s]:dest` is valid), so match `\s*`, not `\s+`; `\S` still requires a
-// non-empty destination so a bare `[s]:` is not treated as a definition.
-const REF_DEFINITION = /^ {0,3}\[[^\]]+\]:\s*\S.*$/;
+// A minimal shape for walking the mdast tree returned by `fromMarkdown` without
+// pulling in `@types/mdast`. Every node carries a source `position`; only
+// `definition` nodes matter here.
+interface MdastNode {
+  type: string;
+  position?: { start: { offset: number }; end: { offset: number } };
+  children?: MdastNode[];
+}
 
-// Fenced code block markers: 3+ backticks or tildes with up to 3 leading spaces.
-// An opening fence may carry an info string; a closing fence may not, so only the
-// fence chars (plus trailing whitespace) are allowed on a close.
-const CODE_FENCE_OPEN = /^ {0,3}(`{3,}|~{3,})/;
-const CODE_FENCE_CLOSE = /^ {0,3}(`{3,}|~{3,})[ \t]*$/;
-
-// Collect the body's link reference definitions, skipping any inside a fenced
-// code block — those are code samples, not real definitions, so lifting them into
-// the isolated heading would resolve a link the author only wrote as code.
-// Indented (4-space) code is already excluded by REF_DEFINITION's ≤3-space rule.
+// Collect the verbatim source of every CommonMark link reference definition in
+// the body. Recognizing a definition is delegated entirely to the real CommonMark
+// parser (`fromMarkdown` — the same engine react-markdown renders with), not a
+// regex: only genuine `definition` nodes are emitted, so every form the spec
+// allows is covered — one-line, no whitespace after the colon (`[s]:dest`),
+// multiline (`[s]:\n  dest`), titled, angle-bracketed — while a bare `[s]:`,
+// indented/fenced code samples, and other non-definitions are excluded for free.
+// The heading is projected in isolation, so its reference-style links would
+// otherwise lose these definitions; we slice each one out by source offset and
+// carry it verbatim (definitions render to nothing, so this never adds output).
 function bodyReferenceDefinitions(bodyMd: string): string[] {
   const defs: string[] = [];
-  let fence = '';
-  for (const raw of bodyMd.split('\n')) {
-    const line = raw.replace(/\r$/, '');
-    if (fence) {
-      const close = line.match(CODE_FENCE_CLOSE)?.[1];
-      if (close && close[0] === fence[0] && close.length >= fence.length) fence = '';
-      continue;
+  const visit = (node: MdastNode) => {
+    if (node.type === 'definition' && node.position) {
+      defs.push(bodyMd.slice(node.position.start.offset, node.position.end.offset));
     }
-    const open = line.match(CODE_FENCE_OPEN)?.[1];
-    if (open) {
-      fence = open;
-      continue;
-    }
-    if (REF_DEFINITION.test(line)) defs.push(line);
-  }
+    node.children?.forEach(visit);
+  };
+  visit(fromMarkdown(bodyMd) as MdastNode);
   return defs;
 }
 
