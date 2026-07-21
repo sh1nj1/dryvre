@@ -75,11 +75,26 @@ def walk_source_entries(source: Path):
             yield Path(directory) / name
 
 
-def reject_forbidden_sources(source: Path, project_root: Path) -> None:
+def reject_forbidden_sources(source: Path, source_root: Path) -> None:
     for candidate in walk_source_entries(source):
-        relative = candidate.relative_to(project_root).as_posix()
+        relative = candidate.relative_to(source_root).as_posix()
         if FORBIDDEN_SOURCE_PATH.search(relative):
             fail(f"forbidden source path: {relative}")
+
+
+def containing_source_root(source: Path, allowed_roots: list[Path]) -> Path | None:
+    """Return the narrowest explicitly allowed root containing source."""
+    matches = [root for root in allowed_roots if inside(source, root)]
+    return max(matches, key=lambda root: len(root.parts), default=None)
+
+
+def source_label(
+    source: Path, source_root: Path, project_root: Path, work_roots: list[Path]
+) -> str:
+    relative = source.relative_to(source_root).as_posix()
+    if source_root == project_root:
+        return relative
+    return f"work-dir[{work_roots.index(source_root) + 1}]/{relative}"
 
 
 def copy_file(source: Path, destination: Path, output_root: Path) -> dict:
@@ -120,10 +135,24 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--spec", required=True, type=Path)
     parser.add_argument("--project-root", type=Path, default=Path.cwd())
+    parser.add_argument(
+        "--work-dir",
+        action="append",
+        default=[],
+        type=Path,
+        help="additional trusted root containing generated artifacts (repeatable)",
+    )
     parser.add_argument("--output-dir", required=True, type=Path)
     args = parser.parse_args()
 
     project_root = args.project_root.resolve()
+    work_roots = [path.resolve() for path in args.work_dir]
+    for work_root in work_roots:
+        if not work_root.is_dir():
+            fail(f"work directory does not exist or is not a directory: {work_root}")
+        if work_root == Path(work_root.anchor):
+            fail("filesystem root cannot be used as a work directory")
+    allowed_source_roots = [project_root, *work_roots]
     output_root = args.output_dir.resolve()
     spec_path = args.spec.resolve()
     if not inside(spec_path, project_root):
@@ -153,13 +182,22 @@ def main() -> int:
         if not source_value or not destination_value:
             fail(f"deliverable {artifact_id} needs source and destination")
         source = (project_root / source_value).resolve()
-        if not inside(source, project_root):
-            fail(f"source escapes project root: {source_value}")
+        source_root = containing_source_root(source, allowed_source_roots)
+        if source_root is None:
+            fail(
+                "source is outside the project root and declared work directories: "
+                f"{source_value}"
+            )
+        source_manifest_label = source_label(
+            source, source_root, project_root, work_roots
+        )
         required = bool(item.get("required", True))
         if not source.exists():
-            missing.append({"id": artifact_id, "source": source_value, "required": required})
+            missing.append(
+                {"id": artifact_id, "source": source_manifest_label, "required": required}
+            )
             continue
-        reject_forbidden_sources(source, project_root)
+        reject_forbidden_sources(source, source_root)
         if source.is_dir() and inside(output_root, source):
             fail(f"output directory cannot be nested inside a packaged source directory: {source_value}")
         destination = safe_destination(output_root, destination_value)
@@ -167,7 +205,7 @@ def main() -> int:
         artifacts.append(
             {
                 "id": artifact_id,
-                "source": source.relative_to(project_root).as_posix(),
+                "source": source_manifest_label,
                 "destination": destination_value,
                 "required": required,
                 "requirements": item.get("requirements", []),

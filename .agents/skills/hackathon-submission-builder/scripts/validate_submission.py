@@ -53,6 +53,7 @@ BINARY_SUFFIXES = {".png", ".jpg", ".jpeg", ".gif", ".pdf", ".mp4", ".mov", ".we
 VIDEO_SUFFIXES = {".mp4", ".mov", ".webm"}
 TAR_SUFFIXES = (".tar", ".tar.gz", ".tgz", ".tar.bz2", ".tbz2", ".tar.xz", ".txz")
 UNSUPPORTED_ARCHIVE_SUFFIXES = (".gz", ".bz2", ".xz", ".zst", ".7z", ".rar")
+WINDOWS_DRIVE_PATH = re.compile(r"^[A-Za-z]:")
 
 
 def sha256(path: Path) -> str:
@@ -165,6 +166,15 @@ def archive_kind(name: str) -> str | None:
     return None
 
 
+def unsafe_archive_member_path(name: str) -> bool:
+    normalized = name.replace("\\", "/")
+    return (
+        normalized.startswith("/")
+        or bool(WINDOWS_DRIVE_PATH.match(normalized))
+        or ".." in PurePosixPath(normalized).parts
+    )
+
+
 def inspect_zip(
     path: Path,
     relative: str,
@@ -179,7 +189,7 @@ def inspect_zip(
             for member in archive.infolist():
                 member_name = member.filename.replace("\\", "/")
                 location = f"{relative}!/{member_name}"
-                if member_name.startswith("/") or ".." in PurePosixPath(member_name).parts:
+                if unsafe_archive_member_path(member_name):
                     errors.append(f"unsafe archive member path: {location}")
                 if stat.S_ISLNK(member.external_attr >> 16):
                     errors.append(f"symbolic link in archive: {location}")
@@ -235,7 +245,7 @@ def inspect_tar(
             for member in archive.getmembers():
                 member_name = member.name.replace("\\", "/")
                 location = f"{relative}!/{member_name}"
-                if member_name.startswith("/") or ".." in PurePosixPath(member_name).parts:
+                if unsafe_archive_member_path(member_name):
                     errors.append(f"unsafe archive member path: {location}")
                 if member.issym() or member.islnk():
                     errors.append(f"link in archive: {location}")
