@@ -13,6 +13,7 @@ export default function App() {
   const [searchOpen, setSearchOpen] = useState(false);
   const [mobileTreeOpen, setMobileTreeOpen] = useState(false);
   const [searchMatches, setSearchMatches] = useState<Set<string> | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   useEffect(() => { void dryvreDataSource.load().then(setSnapshot); }, []);
 
@@ -55,12 +56,39 @@ export default function App() {
     const empty = !filters.text && !filters.referenceId && !filters.status && !filters.author && !filters.updated;
     setSearchMatches(empty ? null : new Set(await dryvreDataSource.search(filters)));
   };
+  const editBlock = async (id: string, bodyMd: string, version: number) => {
+    const saved = await dryvreDataSource.editBlock(id, bodyMd, version);
+    setSnapshot((current) => current && ({ ...current, blocks: current.blocks.map((block) => block.id === id ? saved : block) }));
+    return { version: saved.version ?? version + 1 };
+  };
+  const createBlockAfter = async (id: string, bodyMd: string) => {
+    const block = await dryvreDataSource.createBlockAfter(id, bodyMd);
+    setSnapshot((current) => {
+      if (!current) return current;
+      const index = current.blocks.findIndex((item) => item.id === id);
+      const blocks = [...current.blocks];
+      blocks.splice(index + 1, 0, block);
+      return { ...current, blocks };
+    });
+    setSelectedId(block.id);
+    setEditingId(block.id);
+  };
+  const deleteBlock = async (id: string) => {
+    await dryvreDataSource.deleteBlock(id);
+    setSnapshot((current) => {
+      if (!current) return current;
+      const removed = new Set([id, ...descendantsOf(id, current.blocks).map((block) => block.id)]);
+      return { ...current, blocks: current.blocks.filter((block) => !removed.has(block.id)), messages: current.messages.filter((message) => !removed.has(message.parentId)), references: current.references.filter((reference) => !removed.has(reference.fromId) && !removed.has(reference.toId)) };
+    });
+    setEditingId(null);
+    setSelectedId(scope.id);
+  };
 
   return <div className="app-shell">
     <Topbar path={scopePath} mobileTreeOpen={mobileTreeOpen} onToggleMobileTree={() => setMobileTreeOpen((open) => !open)} />
     <Sidebar blocks={snapshot.blocks} rootId={snapshot.rootId} selectedId={scope.id} visibleIds={visibleIds} mobileOpen={mobileTreeOpen} onSelect={selectFromTree} onOpenSearch={() => setSearchOpen(true)} onClose={() => setMobileTreeOpen(false)} />
     <main><ViewHeader title={scope.title} view={view} onView={setView} /><div className="canvas">
-      {view === 'document' && <DocumentView scopeId={scope.id} selectedId={selected.id} blocks={snapshot.blocks} references={snapshot.references} onSelect={setSelectedId} onStatus={(id, status) => void setStatus(id, status)} />}
+      {view === 'document' && <DocumentView scopeId={scope.id} selectedId={selected.id} editingId={editingId} blocks={snapshot.blocks} references={snapshot.references} onSelect={setSelectedId} onEditStart={setEditingId} onEditEnd={(id) => setEditingId((current) => current === id ? null : current)} onEdit={editBlock} onCreateAfter={createBlockAfter} onDelete={deleteBlock} onStatus={(id, status) => void setStatus(id, status)} />}
       {view === 'board' && <BoardView blocks={scopeBlocks} selectedId={selected.id} onSelect={setSelectedId} onStatus={(id, status) => void setStatus(id, status)} />}
       {view === 'stream' && <StreamView selected={selected} path={selectedPath} messages={selectedMessages} onSend={(body) => void sendMessage(body)} onOpenDocument={() => setView('document')} />}
     </div></main>

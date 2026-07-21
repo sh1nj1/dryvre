@@ -11,6 +11,7 @@ export interface DryvreBlock {
   author: string;
   updatedLabel: string;
   canonical: boolean;
+  version?: number;
 }
 
 export interface BlockReference {
@@ -51,6 +52,9 @@ export interface DryvreDataSource {
   setStatus(blockId: string, status: TaskStatus): Promise<void>;
   createMessage(parentId: string, body: string): Promise<BlockMessage>;
   search(filters: SearchFilters): Promise<string[]>;
+  editBlock(blockId: string, bodyMd: string, version: number): Promise<DryvreBlock>;
+  createBlockAfter(blockId: string, bodyMd: string): Promise<DryvreBlock>;
+  deleteBlock(blockId: string): Promise<void>;
 }
 
 export function blockPath(blockId: string, blocks: DryvreBlock[]) {

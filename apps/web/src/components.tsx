@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import type { BlockMessage, BlockReference, DryvreBlock, SearchFilters, TaskStatus, ViewMode } from './model';
 import { descendantsOf } from './model';
+import { BlockEditor, type EditorSaveResult } from './block-editor';
 
 const statusLabels: Record<TaskStatus, string> = { todo: 'To do', in_progress: 'In progress', done: 'Done' };
 
@@ -71,12 +72,18 @@ function StatusChip({ status }: { status: TaskStatus }) {
   return <span className={`status-chip ${status}`}>{status === 'in_progress' && '● '}{statusLabels[status]}</span>;
 }
 
-export function DocumentView({ scopeId, selectedId, blocks, references, onSelect, onStatus }: {
+export function DocumentView({ scopeId, selectedId, editingId, blocks, references, onSelect, onEditStart, onEditEnd, onEdit, onCreateAfter, onDelete, onStatus }: {
   scopeId: string;
   selectedId: string;
+  editingId: string | null;
   blocks: DryvreBlock[];
   references: BlockReference[];
   onSelect: (id: string) => void;
+  onEditStart: (id: string) => void;
+  onEditEnd: (id: string) => void;
+  onEdit: (id: string, bodyMd: string, version: number) => Promise<EditorSaveResult>;
+  onCreateAfter: (id: string, bodyMd: string) => Promise<void>;
+  onDelete: (id: string) => Promise<void>;
   onStatus: (id: string, status: TaskStatus) => void;
 }) {
   const children = useMemo(() => {
@@ -91,13 +98,14 @@ export function DocumentView({ scopeId, selectedId, blocks, references, onSelect
   }, [blocks]);
 
   const refTargets = new Map(references.map((reference) => [reference.toId, blocks.find((block) => block.id === reference.toId)]));
+  const editor = (block: DryvreBlock) => <BlockEditor bodyMd={block.bodyMd ?? ''} version={block.version ?? 0} onEdit={(bodyMd, version) => onEdit(block.id, bodyMd, version)} onCreateAfter={(bodyMd) => onCreateAfter(block.id, bodyMd)} onDelete={() => onDelete(block.id)} onExit={() => onEditEnd(block.id)} />;
   const renderBlock = (block: DryvreBlock, depth = 0): React.ReactNode => {
     const nested = children.get(block.id) ?? [];
     const isTask = Boolean(block.status);
     return <div className={depth ? 'doc-children' : ''} key={block.id}>
-      <div className={`doc-block ${selectedId === block.id ? 'selected' : ''}`} onClick={() => onSelect(block.id)}>
+      <div className={`doc-block ${selectedId === block.id ? 'selected' : ''}`} tabIndex={0} onClick={() => { onSelect(block.id); onEditStart(block.id); }} onKeyDown={(event) => { if (event.key === 'Enter' && event.target === event.currentTarget) { event.preventDefault(); onEditStart(block.id); } }}>
       <span className="drag-handle">⠿</span>
-      {isTask ? <><div className="task-line"><button className={`check ${block.status === 'done' ? 'done' : ''}`} onClick={(event) => { event.stopPropagation(); onStatus(block.id, block.status === 'done' ? 'todo' : 'done'); }}>{block.status === 'done' ? '✓' : ''}</button><span className={block.status === 'done' ? 'done-copy' : ''}>{block.title}</span><StatusChip status={block.status!} /></div>{block.bodyMd && <div className="doc-copy"><ReactMarkdown>{block.bodyMd}</ReactMarkdown></div>}</> : block.bodyMd ? <div className="doc-copy"><ReactMarkdown>{block.bodyMd}</ReactMarkdown></div> : <h3>{block.title}</h3>}
+      {isTask ? <><div className="task-line"><button className={`check ${block.status === 'done' ? 'done' : ''}`} onClick={(event) => { event.stopPropagation(); onStatus(block.id, block.status === 'done' ? 'todo' : 'done'); }}>{block.status === 'done' ? '✓' : ''}</button><span className={block.status === 'done' ? 'done-copy' : ''}>{block.title}</span><StatusChip status={block.status!} /></div>{editingId === block.id ? editor(block) : block.bodyMd && <div className="doc-copy"><ReactMarkdown>{block.bodyMd}</ReactMarkdown></div>}</> : editingId === block.id ? editor(block) : block.bodyMd ? <div className="doc-copy"><ReactMarkdown>{block.bodyMd}</ReactMarkdown></div> : <h3>{block.title}</h3>}
       </div>
       {nested.map((child) => renderBlock(child, depth + 1))}
     </div>;
@@ -105,7 +113,7 @@ export function DocumentView({ scopeId, selectedId, blocks, references, onSelect
   const scope = blocks.find((block) => block.id === scopeId);
   const scopeChildren = children.get(scopeId) ?? [];
   return <article className="doc-sheet">
-    {scope && scopeId !== 'launch' && <div className={`doc-block ${selectedId === scope.id ? 'selected' : ''}`} onClick={() => onSelect(scope.id)}><span className="drag-handle">⠿</span><h2>{scope.title}</h2>{scope.bodyMd && <div className="doc-copy"><ReactMarkdown>{scope.bodyMd}</ReactMarkdown></div>}</div>}
+    {scope && scopeId !== 'launch' && <div className={`doc-block ${selectedId === scope.id ? 'selected' : ''}`} onClick={() => { onSelect(scope.id); onEditStart(scope.id); }}><span className="drag-handle">⠿</span><h2>{scope.title}</h2>{editingId === scope.id ? editor(scope) : scope.bodyMd && <div className="doc-copy"><ReactMarkdown>{scope.bodyMd}</ReactMarkdown></div>}</div>}
     {scopeChildren.map((block) => renderBlock(block))}
     {scopeId === 'launch' && <div className="doc-block reference-sentence"><span className="drag-handle">⠿</span><p>Launch criteria are informed by {[...refTargets.values()].filter(Boolean).map((target) => <button className="ref-chip" key={target!.id} onClick={() => onSelect(target!.id)}>↗ {target!.title}</button>)}</p></div>}
   </article>;
