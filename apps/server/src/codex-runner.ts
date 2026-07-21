@@ -13,6 +13,13 @@ import { isUnknownCodexSession, parseCodexJsonl } from "@dryvre/shared";
 import type { AppConfig } from "./config.js";
 
 const MAX_CAPTURE_BYTES = 1024 * 1024;
+// Security invariant: never copy the user's config.toml into the managed home.
+// Codex loads a workspace-local `.codex/config.toml` (which can redefine
+// `[mcp_servers.*]` and approval modes) only for *trusted* projects. The managed
+// config.toml written below lists no `[projects.*]` trust, so `codex exec` treats
+// the workspace as untrusted and ignores its project config, keeping the tool set
+// pinned to the three managed Dryvre tools. The user's real config.toml trusts
+// many projects, so copying it here would silently defeat that invariant.
 const STATIC_CODEX_FILES = ["config.json", "instructions.md"];
 const execFileAsync = promisify(execFile);
 
@@ -76,6 +83,12 @@ async function materializeSkills(codexHome: string, skills: CompiledSkill[]) {
 }
 
 export function buildManagedCodexConfig(mcpEntry: string) {
+  // `default_tools_approval_mode = "approve"` auto-approves these tools in the
+  // non-interactive run. That is only safe because the tool set is fixed to the
+  // three managed Dryvre tools: this config trusts no project, so a
+  // workspace-local `.codex/config.toml` cannot add MCP servers or widen
+  // approvals (Codex loads project config for trusted projects only). Do not add
+  // a `[projects.*]` trust entry here without re-pinning the MCP allowlist.
   return [
     "[mcp_servers.dryvre]",
     "enabled = true",
