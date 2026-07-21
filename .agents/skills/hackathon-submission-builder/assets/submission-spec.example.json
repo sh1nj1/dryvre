@@ -1,0 +1,30 @@
+{
+  "project": "Example Project",
+  "requirements": [
+    {"id": "R1", "text": "A README with reproducible setup", "required": true},
+    {"id": "R2", "text": "A demo video under three minutes", "required": true}
+  ],
+  "deliverables": [
+    {
+      "id": "readme",
+      "source": "README.md",
+      "destination": "01-project/README.md",
+      "required": true,
+      "requirements": ["R1"]
+    },
+    {
+      "id": "demo-video",
+      "source": ".hackathon-work/video/demo-captioned.mp4",
+      "destination": "03-media/demo-captioned.mp4",
+      "required": true,
+      "requirements": ["R2"]
+    },
+    {
+      "id": "demo-captions",
+      "source": ".hackathon-work/video/demo.srt",
+      "destination": "03-media/demo.srt",
+      "required": true,
+      "requirements": ["R2"]
+    }
+  ]
+}
