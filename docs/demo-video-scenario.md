@@ -10,6 +10,14 @@
 
 > Agents do not guess past a blocker. They ask in your Inbox, resume with your answer, and finish with evidence.
 
+## 언어와 자막
+
+- 최종 영상의 음성 내레이션은 모두 영어로 녹음한다.
+- 자막은 영어로 제공하고 아래 장면표의 내레이션 원문과 동일하게 맞춘다.
+- 제품 UI, seed 콘텐츠, 사용자가 입력하는 프롬프트, Inbox 질문, 승인 답글과 에이전트 결과도 모두 영어로 표시한다.
+- 최종 영상 프레임과 오디오에는 한국어를 포함하지 않는다. 이 제작 문서만 한국어로 유지할 수 있다.
+- 무음으로 재생해도 전체 흐름을 이해할 수 있도록 모든 음성 문장에 자막을 표시한다.
+
 ## 사전 준비
 
 - `Launch Dryvre` 블록과 제품 요구사항을 seed 데이터로 준비한다.
@@ -20,17 +28,17 @@
 
 ## 2분 50초 장면 구성
 
-| 시간 | 화면과 조작 | 내레이션 요점 |
+| 시간 | 화면과 조작 | 영어 내레이션 및 자막 원문 |
 | --- | --- | --- |
-| 0:00–0:15 | 완성된 보드를 잠깐 보여준 뒤 문서 뷰의 `Launch Dryvre` 블록으로 이동한다. | “Dryvre는 문서, 업무, 대화와 AI 결과를 하나의 블록 트리에서 다룹니다.” |
-| 0:15–0:35 | 출시 요구사항 아래 스트림을 열고 `@PM Agent, turn this into an executable launch task`라고 요청한다. | “먼저 PM Agent가 흩어진 컨텍스트를 실행 가능한 계약으로 만듭니다.” |
-| 0:35–0:55 | PM Agent가 결과물, 완료 조건, 제약, 검증 방법과 `@Developer Agent`가 포함된 자식 블록을 작성한다. 상태는 아직 없다. | “AI가 만든 것은 별도 티켓이 아니라 같은 트리의 편집 가능한 블록입니다.” |
-| 0:55–1:08 | 사용자가 작업을 검토하고 `todo`로 바꾼다. 보드에 같은 ID의 카드가 나타난다. | “`todo`는 사람의 명시적인 실행 승인입니다.” |
-| 1:08–1:25 | Developer Agent가 사전 검증한다. 공개 승인 조건이 빠져 있어 카드는 `todo`에 머문다. 왼쪽 Inbox에 새 요청 표시가 나타난다. | “에이전트는 모호한 완료 조건을 추측하지도, 일단 진행 중이라고 표시하지도 않습니다.” |
-| 1:25–1:45 | Inbox를 열어 원래 작업이 참조된 질문을 확인한다. 사용자가 답글로 공개를 승인한다. | “막힌 질문과 승인은 사용자별 Inbox의 하나의 스트림으로 모입니다.” |
-| 1:45–2:05 | 작업 화면으로 돌아오면 같은 카드가 자동으로 `in_progress`가 되고 Developer Agent가 실행 로그와 결과 블록을 추가한다. | “답을 받은 에이전트는 같은 작업을 선점하고 중단 지점에서 루프를 재개합니다.” |
-| 2:05–2:25 | 검증 체크가 성공하고 결과·증거 자식 블록이 보인 뒤 카드가 `done`으로 이동한다. | “검증 가능한 근거가 기록된 뒤에만 작업은 완료됩니다.” |
-| 2:25–2:42 | 문서, 보드, 스트림을 빠르게 전환하며 작업 ID, 상태, Inbox 질문의 backlink와 결과 블록이 유지됨을 보여준다. | “계획, 실행, 질문과 결과 사이에 복사나 동기화 단계가 없습니다. 처음부터 같은 블록입니다.” |
+| 0:00–0:15 | 완성된 보드를 잠깐 보여준 뒤 문서 뷰의 `Launch Dryvre` 블록으로 이동한다. | “Dryvre brings documents, work, conversations, and AI output into one block tree.” |
+| 0:15–0:35 | 출시 요구사항 아래 스트림을 열고 `@PM Agent, turn this into an executable launch task`라고 요청한다. | “First, the PM Agent turns scattered context into an executable contract.” |
+| 0:35–0:55 | PM Agent가 결과물, 완료 조건, 제약, 검증 방법과 `@Developer Agent`가 포함된 자식 블록을 작성한다. 상태는 아직 없다. | “The AI creates an editable block in the same tree, not a separate ticket.” |
+| 0:55–1:08 | 사용자가 작업을 검토하고 `todo`로 바꾼다. 보드에 같은 ID의 카드가 나타난다. | “Moving it to To do is the human's explicit approval to execute.” |
+| 1:08–1:25 | Developer Agent가 사전 검증한다. 공개 승인 조건이 빠져 있어 카드는 `todo`에 머문다. 왼쪽 Inbox에 새 요청 표시가 나타난다. | “The Developer Agent checks the completion contract first. It never guesses past a missing decision.” |
+| 1:25–1:45 | Inbox를 열어 원래 작업이 참조된 질문을 확인한다. 사용자가 답글로 공개를 승인한다. | “Blocking questions and approval requests arrive in one personal Inbox stream.” |
+| 1:45–2:05 | 작업 화면으로 돌아오면 같은 카드가 자동으로 `in_progress`가 되고 Developer Agent가 실행 로그와 결과 블록을 추가한다. | “With the answer provided, the agent claims the same task and resumes the loop.” |
+| 2:05–2:25 | 검증 체크가 성공하고 결과·증거 자식 블록이 보인 뒤 카드가 `done`으로 이동한다. | “Only verified work, recorded with evidence, can move to Done.” |
+| 2:25–2:42 | 문서, 보드, 스트림을 빠르게 전환하며 작업 ID, 상태, Inbox 질문의 backlink와 결과 블록이 유지됨을 보여준다. | “Plans, execution, questions, and results never need copying or syncing. They are the same blocks from the start.” |
 | 2:42–2:50 | 제품명과 핵심 문장을 보여준다. | “Humans set intent. Agents close the loop.” |
 
 ## 데모에서 보여야 하는 상태
@@ -51,4 +59,5 @@
 - 입력 대기와 모델 지연은 편집해 줄이되 서로 다른 실행을 하나처럼 이어 붙이지 않는다.
 - Inbox를 일반 알림함처럼 채우지 않는다. 데모에는 진행을 막는 요청 하나만 둔다.
 - `done` 장면에서 결과 블록과 검증 성공을 함께 보여준다.
+- 영어 자막이 UI의 핵심 상태나 클릭 대상을 가리지 않도록 화면 하단 안전 영역에 배치한다.
 - 전체 러닝타임은 2분 50초를 목표로 하여 제출 제한 전에 10초 여유를 둔다.
