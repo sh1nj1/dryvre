@@ -11,6 +11,7 @@ Dryvre의 장기 제품 원칙과 해커톤 제출 범위를 분리해 관리한
 - [개발 DB와 E2E](development-database.md): 로컬 PostgreSQL 초기화, 자동 Testcontainers 모드, CI 테스트
 - [해커톤 MVP 범위](hackathon-scope.md): 구현 목표, 데모 흐름, 비범위와 제출 체크리스트
 - [OpenAI Build Week](build-week.md): 일정, 트랙, 심사 기준, 제출 요건과 공식 자료
+- [구현 안함 — Backlog](not-implemented/README.md): 참고할 수 있지만 현재 구현하지 않는 설계 후보
 
 ## 우선순위
 
@@ -22,3 +23,5 @@ Dryvre의 장기 제품 원칙과 해커톤 제출 범위를 분리해 관리한
 4. `hackathon-scope.md`의 시간 제약과 비범위
 
 Build Week 안내는 대회 운영 정보이며 제품 설계를 결정하지 않는다.
+
+`not-implemented/`의 문서는 우선순위 판단에 사용하는 활성 스펙이 아니다. 사용자가 명시적으로 승격하기 전까지 참고자료로만 사용한다.
