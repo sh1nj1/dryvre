@@ -15,8 +15,9 @@ export const api = {
 };
 
 export function connectLive(onChange: () => void, onStatus: (online: boolean) => void) {
-  const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
-  const socket = new WebSocket(`${protocol}//${location.host}/api/live`);
+  const liveUrl = new URL(`${apiBase.replace(/\/$/, '')}/api/live`, location.origin);
+  liveUrl.protocol = liveUrl.protocol === 'https:' ? 'wss:' : 'ws:';
+  const socket = new WebSocket(liveUrl);
   socket.onopen = () => onStatus(true);
   socket.onclose = () => onStatus(false);
   socket.onmessage = (event) => {

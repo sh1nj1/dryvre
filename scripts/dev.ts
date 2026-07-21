@@ -24,16 +24,22 @@ function isPortOpen(host: string, port: number) {
 }
 
 async function resolveDatabase() {
-  const useLocal = mode === 'local' || (mode === 'auto' && await isPortOpen('127.0.0.1', 5432));
+  if (mode !== 'auto' && mode !== 'local' && mode !== 'container') {
+    throw new Error('DRYVRE_DB_MODE must be auto, local, or container');
+  }
+
+  const databaseUrl = process.env.DATABASE_URL ?? LOCAL_DATABASE_URL;
+  const configuredDatabase = new URL(databaseUrl);
+  const databaseHost = configuredDatabase.hostname;
+  const databasePort = configuredDatabase.port ? Number(configuredDatabase.port) : 5432;
+  const useLocal = mode === 'local' || (mode === 'auto' && await isPortOpen(databaseHost, databasePort));
   if (useLocal) {
-    const databaseUrl = process.env.DATABASE_URL ?? LOCAL_DATABASE_URL;
-    console.log(`[dev] PostgreSQL detected on localhost:5432; using ${databaseUrl.replace(/:[^:@/]+@/, ':***@')}`);
+    console.log(`[dev] PostgreSQL detected on ${databaseHost}:${databasePort}; using ${databaseUrl.replace(/:[^:@/]+@/, ':***@')}`);
     return { databaseUrl };
   }
-  if (mode !== 'auto' && mode !== 'container') throw new Error('DRYVRE_DB_MODE must be auto, local, or container');
 
   await assertDockerReady();
-  console.log('[dev] PostgreSQL not found on localhost:5432; starting postgres:17-alpine with Testcontainers…');
+  console.log(`[dev] PostgreSQL not found on ${databaseHost}:${databasePort}; starting postgres:17-alpine with Testcontainers…`);
   const container = await new PostgreSqlContainer('postgres:17-alpine')
     .withDatabase('dryvre')
     .withUsername('dryvre')

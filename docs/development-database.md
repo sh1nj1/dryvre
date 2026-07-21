@@ -62,14 +62,15 @@ npm run dev
 
 The bootstrap follows this sequence:
 
-1. Probe TCP `127.0.0.1:5432`.
-2. If it is open, use `DATABASE_URL`, or default to `postgres://dryvre:dryvre@localhost:5432/dryvre`.
-3. If it is closed, start `postgres:17-alpine` with Testcontainers.
-4. Apply all Drizzle migrations.
-5. Start Fastify and Vite with the selected `DATABASE_URL`.
-6. Stop the ephemeral container when the development process exits.
+1. Read `DATABASE_URL`, or default to `postgres://dryvre:dryvre@localhost:5432/dryvre`.
+2. Probe the configured PostgreSQL host and port.
+3. If it is open, use that configured database.
+4. If it is closed, start `postgres:17-alpine` with Testcontainers.
+5. Apply all Drizzle migrations.
+6. Start Fastify and Vite with the selected `DATABASE_URL`.
+7. Stop the ephemeral container when the development process exits.
 
-When local PostgreSQL is running but the `dryvre` role or database is missing, the bootstrap exits with the `psql` initialization command instead of silently using a container.
+When the configured PostgreSQL endpoint is reachable but the `dryvre` role or database is missing, the bootstrap exits with the `psql` initialization command instead of silently using a container.
 
 Mode selection can be forced when diagnosing environment issues:
 

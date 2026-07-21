@@ -32,7 +32,7 @@ npm install
 npm run dev
 ```
 
-`npm run dev` uses PostgreSQL on `localhost:5432` when available. Otherwise it starts an ephemeral PostgreSQL 17 instance with Testcontainers and applies migrations automatically. See the [database guide](docs/development-database.md) for the local `psql` initialization command, forced modes, and E2E workflow.
+`npm run dev` uses the PostgreSQL host and port configured by `DATABASE_URL` when available (defaulting to `localhost:5432`). Otherwise it starts an ephemeral PostgreSQL 17 instance with Testcontainers and applies migrations automatically. See the [database guide](docs/development-database.md) for the local `psql` initialization command, forced modes, and E2E workflow.
 
 Open <http://localhost:5173>. Development uses the seeded `builder` identity; production requires a valid database-backed session cookie.
 
