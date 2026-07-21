@@ -101,4 +101,20 @@ describe('Markdown block projections', () => {
     // A 4-space indent makes it code, not a definition, so it is not carried.
     expect(headingMarkdown({ title: 'x', bodyMd: '# Title\n\n    [not]: a-def' })).toBe('# Title');
   });
+
+  it('does not lift reference definitions out of fenced code blocks', () => {
+    // A `[s]: url` line inside a fenced code block is a code sample, not a real
+    // definition — carrying it would resolve a heading link the author only wrote
+    // as code, diverging from how ReactMarkdown renders the body.
+    expect(
+      headingMarkdown({ title: 'x', bodyMd: '# [Spec][s]\n\n```\n[s]: https://evil.example.com\n```' }),
+    ).toBe('# [Spec][s]');
+    // A real definition after the fence is still carried; the fenced one is not.
+    expect(
+      headingMarkdown({
+        title: 'x',
+        bodyMd: '# [x][s]\n\n```\n[s]: https://code.example\n```\n\n[s]: https://real.example',
+      }),
+    ).toBe('# [x][s]\n\n[s]: https://real.example');
+  });
 });

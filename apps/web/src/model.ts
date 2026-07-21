@@ -103,7 +103,37 @@ export function blockSummary(block: Pick<DryvreBlock, 'bodyMd'>) {
 // A single-line CommonMark link reference definition (`[label]: dest "title"`),
 // with up to 3 leading spaces (4+ is indented code). These render to nothing but
 // supply targets for reference-style links.
-const REF_DEFINITION = /^ {0,3}\[[^\]]+\]:\s+\S.*$/gm;
+const REF_DEFINITION = /^ {0,3}\[[^\]]+\]:\s+\S.*$/;
+
+// Fenced code block markers: 3+ backticks or tildes with up to 3 leading spaces.
+// An opening fence may carry an info string; a closing fence may not, so only the
+// fence chars (plus trailing whitespace) are allowed on a close.
+const CODE_FENCE_OPEN = /^ {0,3}(`{3,}|~{3,})/;
+const CODE_FENCE_CLOSE = /^ {0,3}(`{3,}|~{3,})[ \t]*$/;
+
+// Collect the body's link reference definitions, skipping any inside a fenced
+// code block — those are code samples, not real definitions, so lifting them into
+// the isolated heading would resolve a link the author only wrote as code.
+// Indented (4-space) code is already excluded by REF_DEFINITION's ≤3-space rule.
+function bodyReferenceDefinitions(bodyMd: string): string[] {
+  const defs: string[] = [];
+  let fence = '';
+  for (const raw of bodyMd.split('\n')) {
+    const line = raw.replace(/\r$/, '');
+    if (fence) {
+      const close = line.match(CODE_FENCE_CLOSE)?.[1];
+      if (close && close[0] === fence[0] && close.length >= fence.length) fence = '';
+      continue;
+    }
+    const open = line.match(CODE_FENCE_OPEN)?.[1];
+    if (open) {
+      fence = open;
+      continue;
+    }
+    if (REF_DEFINITION.test(line)) defs.push(line);
+  }
+  return defs;
+}
 
 // Markdown for a block's projected heading. When the body starts with an ATX
 // heading, return that original line verbatim so its level (# vs ###) and inline
@@ -119,8 +149,8 @@ export function headingMarkdown(block: Pick<DryvreBlock, 'title' | 'bodyMd'>) {
   const bodyMd = block.bodyMd ?? '';
   const { line } = firstContentLine(bodyMd);
   const heading = ATX_HEADING.test(line) ? line : `## ${blockTitle(block)}`;
-  const defs = bodyMd.match(REF_DEFINITION);
-  return defs ? `${heading}\n\n${defs.join('\n')}` : heading;
+  const defs = bodyReferenceDefinitions(bodyMd);
+  return defs.length ? `${heading}\n\n${defs.join('\n')}` : heading;
 }
 
 export function blockPath(blockId: string, blocks: DryvreBlock[]) {
