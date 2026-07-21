@@ -3,15 +3,18 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
+import { validateFixtures, validateScenario } from "./video_scenario.mjs";
 
 const [playwrightRoot, baseUrl, scenarioPath, fixturesPath, outputDir] = process.argv.slice(2);
 if (!playwrightRoot || !baseUrl || !scenarioPath || !outputDir) {
   throw new Error("usage: record_demo.mjs <playwright-root> <base-url> <scenario> <fixtures-or-empty> <output-dir>");
 }
 
-const { chromium } = await import(pathToFileURL(path.join(playwrightRoot, "index.mjs")).href);
 const scenario = JSON.parse(await fs.readFile(scenarioPath, "utf8"));
 const fixtures = fixturesPath ? JSON.parse(await fs.readFile(fixturesPath, "utf8")) : {};
+validateScenario(scenario);
+validateFixtures(fixtures);
+const { chromium } = await import(pathToFileURL(path.join(playwrightRoot, "index.mjs")).href);
 const viewport = scenario.viewport ?? { width: 1440, height: 900 };
 await fs.mkdir(outputDir, { recursive: true });
 await fs.mkdir(path.join(outputDir, "screenshots"), { recursive: true });

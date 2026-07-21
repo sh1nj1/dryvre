@@ -12,7 +12,7 @@
     "build": "npm run build -w @dryvre/shared && npm run build -w @dryvre/db && npm run build -w @dryvre/web && npm run build -w @dryvre/server && npm run build -w @dryvre/mcp",
     "typecheck": "tsc -p tsconfig.tools.json && npm run typecheck --workspaces --if-present",
     "test": "vitest run --config vitest.config.ts && npm run test:skill",
-    "test:skill": "PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s .agents/skills/hackathon-submission-builder/tests -p 'test_*.py'",
+    "test:skill": "PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s .agents/skills/hackathon-submission-builder/tests -p 'test_*.py' && node --test .agents/skills/hackathon-submission-builder/tests/test_video_scenario.mjs",
     "test:e2e": "vitest run --config vitest.e2e.config.ts",
     "lint": "eslint .",
     "format": "prettier --write .",
