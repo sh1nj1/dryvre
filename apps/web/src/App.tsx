@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { parseBlockDirective, sortBlocksInDocumentOrder, type Block, type WsServerMessage } from '@dryvre/shared';
 import { api, connectLive } from './api';
 import { dryvreDataSource } from './data-source';
@@ -6,6 +6,7 @@ import { BoardView, ContextRail, DocumentView, SearchDialog, Sidebar, StreamView
 import type { DryvreSnapshot, SearchFilters, TaskStatus, ViewMode } from './model';
 import { blockPath, descendantsOf } from './model';
 import { ROOT_ID } from './use-tree';
+import { PanelResizer, usePanelLayout } from './panel-layout';
 import './styles.css';
 
 const HUMAN_ID = '00000000-0000-4000-8000-000000000001';
@@ -65,6 +66,7 @@ export default function App() {
   const [liveOnline, setLiveOnline] = useState(false);
   const [liveMessage, setLiveMessage] = useState<WsServerMessage>();
   const [inboxId, setInboxId] = useState<string>();
+  const panelLayout = usePanelLayout(view);
 
   const syncServerTree = useCallback(async () => {
     const response = await api.tree(ROOT_ID);
@@ -225,7 +227,7 @@ export default function App() {
   const contextReferenceCount = snapshot.references.filter((reference) => reference.fromId === selected.id).length;
   const contextSummary = `${contextBlockCount} ${contextBlockCount === 1 ? 'block' : 'blocks'} · ${contextReferenceCount} ${contextReferenceCount === 1 ? 'reference' : 'references'}`;
 
-  return <div className="app-shell">
+  return <div className="app-shell" style={{ '--sidebar': `${panelLayout.left}px`, '--context': `${panelLayout.right}px` } as CSSProperties}>
     <Topbar path={scopePath} view={view} mobileTreeOpen={mobileTreeOpen} onView={setView} onToggleMobileTree={() => setMobileTreeOpen((open) => !open)} />
     <Sidebar blocks={snapshot.blocks} rootId={snapshot.rootId} inboxId={inboxId} selectedId={scope.id} visibleIds={visibleIds} mobileOpen={mobileTreeOpen} onSelect={selectFromTree} onOpenInbox={(id) => { selectFromTree(id); setView('stream'); setMobileTreeOpen(false); }} onOpenSearch={() => setSearchOpen(true)} onClose={() => setMobileTreeOpen(false)} />
     <main className={view === 'stream' ? 'workspace workspace-hidden' : 'workspace'}><div className="canvas">
@@ -238,6 +240,8 @@ export default function App() {
       <StreamView selected={selected} messages={selectedMessages} focusedMessageId={focusedMessageId} agents={agents} agentTarget={agentTarget} live={liveOnline} liveMessage={liveMessage} contextSummary={contextSummary} onSend={(body, parentId) => void sendMessage(body, parentId)} onAgentSent={handleAgentSent} />
     </section>
     {view === 'stream' && <ContextRail selected={selected} path={selectedScopePath} blocks={snapshot.blocks} references={snapshot.references} />}
+    <PanelResizer className="panel-resizer-left" label="Resize tree panel" value={panelLayout.left} min={panelLayout.leftMin} max={panelLayout.leftMax} direction={1} onResize={panelLayout.setLeft} onReset={panelLayout.resetLeft} />
+    <PanelResizer className="panel-resizer-right" label={`Resize ${view === 'stream' ? 'context' : 'stream'} panel`} value={panelLayout.right} min={panelLayout.rightMin} max={panelLayout.rightMax} direction={-1} onResize={panelLayout.setRight} onReset={panelLayout.resetRight} />
     <SearchDialog open={searchOpen} blocks={snapshot.blocks} scopePath={scopePath} onClose={closeSearch} onApply={(filters) => void applySearch(filters)} />
   </div>;
 }

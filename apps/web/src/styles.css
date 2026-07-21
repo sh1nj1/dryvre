@@ -28,7 +28,14 @@ body { margin: 0; min-width: 320px; overflow: hidden; background: radial-gradien
 button, textarea, input, select { font: inherit; color: inherit; }
 button { cursor: pointer; }
 
-.app-shell { height: 100vh; display: grid; grid-template-columns: var(--sidebar) minmax(0, 1fr) var(--context); grid-template-rows: 58px minmax(0, 1fr); }
+.app-shell { position: relative; height: 100vh; display: grid; grid-template-columns: var(--sidebar) minmax(0, 1fr) var(--context); grid-template-rows: 58px minmax(0, 1fr); }
+.panel-resizer { position: absolute; top: 0; bottom: 0; width: 11px; z-index: 30; outline: 0; cursor: col-resize; touch-action: none; transform: translateX(-50%); }
+.panel-resizer::after { content: ""; position: absolute; top: 0; bottom: 0; left: 5px; width: 1px; background: transparent; transition: width .14s ease, background .14s ease, transform .14s ease; }
+.panel-resizer:hover::after, .panel-resizer:focus-visible::after, .panel-resizer.dragging::after { width: 3px; background: var(--accent); transform: translateX(-1px); }
+.panel-resizer:focus-visible::before { content: ""; position: absolute; top: 66px; bottom: 8px; left: 1px; right: 1px; border-radius: 6px; box-shadow: 0 0 0 2px rgba(228, 90, 54, .22); }
+.panel-resizer-left { left: var(--sidebar); }
+.panel-resizer-right { left: calc(100% - var(--context)); }
+body.panel-resizing { cursor: col-resize; user-select: none; }
 .app-loading { height: 100%; display: grid; place-content: center; justify-items: center; color: var(--muted); }
 .app-loading .brand-mark { width: 42px; height: 42px; font-size: 24px; }
 .app-loading p { font-size: 12px; }
@@ -271,6 +278,7 @@ button { cursor: pointer; }
 @media (max-width: 850px) {
   body { overflow: auto; }
   .app-shell { min-height: 100vh; height: auto; grid-template-columns: 1fr; grid-template-rows: 56px minmax(0, 1fr); }
+  .panel-resizer { display: none; }
   .topbar { position: sticky; top: 0; grid-column: 1; grid-template-columns: auto minmax(0, 1fr) auto; }
   .brand { padding: 0 10px; border-right: 0; }
   .brand-name { display: none; }
