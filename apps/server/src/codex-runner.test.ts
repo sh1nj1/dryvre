@@ -56,6 +56,15 @@ describe("Codex runner", () => {
     expect(killCodexProcessGroup(process.pid, "SIGKILL", () => {
       throw new Error("The server must never kill itself");
     })).toBe(false);
+    expect(killCodexProcessGroup(1, "SIGKILL", () => {
+      throw new Error("Unsafe low PIDs must be rejected before kill");
+    })).toBe(false);
+    expect(killCodexProcessGroup(Number.MAX_SAFE_INTEGER + 1, "SIGKILL", () => {
+      throw new Error("Unsafe integers must be rejected before kill");
+    })).toBe(false);
+    expect(killCodexProcessGroup(42_425, "SIGKILL", () => {
+      throw new Error("Process no longer exists");
+    })).toBe(false);
   });
 
   it("settles the process promise when the child closes stdin early", async () => {

@@ -81,6 +81,12 @@ export async function createAgentRuntime(
   const children = new Map<string, ChildProcessWithoutNullStreams>();
   const cancelled = new Set<string>();
   const activeAgents = new Set<string>();
+  // Hackathon MVP recovery assumes a server-process restart within the same host
+  // boot. A production worker must persist boot identity/process start time before
+  // trusting a recycled PID after a machine reboot.
+  // A hard crash between spawn() returning and the best-effort PID UPDATE below is
+  // also unrecoverable here; closing that small window requires an external worker
+  // supervisor or a launch protocol that persists identity before exec.
   const interruptedRuns = await db
     .select({ pid: agentRuns.pid })
     .from(agentRuns)
