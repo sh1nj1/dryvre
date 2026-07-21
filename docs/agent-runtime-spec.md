@@ -7,6 +7,14 @@
 - 구현 기준: 이 문서의 `Phase 0`부터 `Phase 3`까지
 - 후속 범위: 원격 실행, 자율 트리거와 Agent 간 자동 위임
 
+## 해커톤 MVP 보안 범위 결정
+
+이번 해커톤에서 AI Agent 기능은 **기능적 수직 슬라이스만** 평가하고 구현한다. 범위는 블록 기반 Agent 정의, 계층형 Skill 컴파일, Local Codex CLI 호출, 실행 상태 전이와 결과 블록 저장이다. 프로덕션 수준의 보안 설계와 보안 강화는 MVP 완료 조건이 아니며 이번 구현에서 다루지 않는다.
+
+특히 real runner가 Dryvre 서버 프로세스의 환경 변수를 상속하므로 `DATABASE_URL`, `SESSION_SECRET`, `OPENAI_API_KEY` 같은 값에 접근할 수 있다는 위험을 알려진 제한으로 수용한다. 환경 변수 allowlist/격리, secret broker, prompt injection 방어, 신뢰되지 않은 Skill 검증, 사용자·tenant 격리, 세분화된 실행 권한과 원격 sandbox는 해커톤 이후 범위다.
+
+따라서 real runner는 신뢰할 수 있는 개발자가 관리하는 로컬 단일 사용자 데모 환경에서만 사용한다. 공개 서버, 공유 호스트, 실제 운영 credential이 있는 환경에는 배포하지 않는다. 발표와 일반 기능 검증에는 credential이 필요 없는 `DRYVRE_AGENT_FAKE=true`를 기본으로 사용한다. 이 문서 아래의 workspace 검사, `workspace-write`, 출력 제한 같은 가드레일은 데모의 오작동 범위를 줄이는 기능적 방어선일 뿐 보안 경계나 프로덕션 안전성 보장이 아니다. 보안 리뷰에서 발견된 사항은 후속 작업으로 기록하되 해커톤 MVP의 기능 승인 조건으로 취급하지 않는다.
+
 ## 결정 요약
 
 Dryvre는 Agent와 Skill을 새 제품 엔티티로 만들지 않는다. Agent 정의와 Skill 원본은 모두 일반 블록이며, 트리와 `ref`로 구성한다. 실행 중인 프로세스, Codex session ID와 실패 상태처럼 문서가 아닌 일시적 운영 정보만 런타임 테이블에 둔다.
@@ -268,6 +276,9 @@ Agent 목록은 별도 API 엔티티가 아니라 현재 root에서 `@agent` Mar
 
 ## MVP 비범위
 
+- 프로덕션 보안 강화 전반: child-process 환경 변수 allowlist/격리와 secret broker
+- prompt injection 방어, 신뢰되지 않은 Agent/Skill 실행 검증과 공급망 보안
+- 사용자·tenant 격리, 세분화된 권한, 원격 sandbox와 공개 배포 hardening
 - Agent가 Agent를 자율적으로 생성하거나 무한 호출하는 orchestration loop
 - Agent 조직도, manager, budget, heartbeat와 scheduler
 - 임의 CLI adapter marketplace

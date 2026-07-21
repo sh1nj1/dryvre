@@ -197,10 +197,13 @@ export async function createAgentRuntime(
         "# Output contract",
         "Finish with a concise Markdown summary. Dryvre stores the final message as a first-class block.",
       ].join("\n\n");
-      await db
+      if (cancelled.has(runId)) return;
+      const [started] = await db
         .update(agentRuns)
         .set({ status: "running", startedAt: new Date() })
-        .where(eq(agentRuns.id, runId));
+        .where(and(eq(agentRuns.id, runId), eq(agentRuns.status, "queued")))
+        .returning({ id: agentRuns.id });
+      if (!started || cancelled.has(runId)) return;
       publish({ type: "agent_run_status", runId, status: "running" });
       const result = await runCodex({
         config,
@@ -212,6 +215,10 @@ export async function createAgentRuntime(
         workspace,
         resumeSessionId: previous?.codexSessionId ?? null,
         onSpawn: (child) => {
+          if (cancelled.has(runId)) {
+            stopCodexProcess(child);
+            return;
+          }
           children.set(runId, child);
           void db
             .update(agentRuns)
