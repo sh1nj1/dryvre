@@ -10,6 +10,7 @@ import {
   type DryvreDatabase,
 } from "@dryvre/db";
 import {
+  blockOpSchema,
   compileSkills,
   parseAgentDefinition,
   sortBlocksInDocumentOrder,
@@ -18,7 +19,11 @@ import {
   type CreateAgentRun,
 } from "@dryvre/shared";
 import type { AppConfig } from "./config.js";
-import { applyOperation, getAiContext } from "./block-service.js";
+import {
+  applyOperation,
+  applyOperationInTransaction,
+  getAiContext,
+} from "./block-service.js";
 import {
   checkCodexReadiness,
   resolveAgentWorkspace,
@@ -258,26 +263,43 @@ export async function createAgentRuntime(
         return;
       }
       const resultBlockId = randomUUID();
+      const op = blockOpSchema.safeParse({
+        type: "create",
+        id: resultBlockId,
+        parentId: input.targetBlockId,
+        bodyMd: result.summary,
+        stream: true,
+      });
+      if (!op.success) {
+        await finishFailure(
+          runId,
+          input.targetBlockId,
+          agentSubjectId,
+          "invalid_output",
+        );
+        return;
+      }
       const envelope = {
         clientOpId: randomUUID(),
-        op: {
-          type: "create" as const,
-          id: resultBlockId,
-          parentId: input.targetBlockId,
-          bodyMd: result.summary,
-          stream: true,
-        },
+        op: op.data,
       };
-      const applied = await applyOperation(db, envelope, agentSubjectId);
-      await db
-        .update(agentRuns)
-        .set({
-          status: "succeeded",
-          codexSessionId: result.sessionId,
-          finishedAt: new Date(),
-          pid: null,
-        })
-        .where(eq(agentRuns.id, runId));
+      if (!agentSubjectId) throw new Error("Agent subject is unavailable");
+      const resultAuthorId = agentSubjectId;
+      const applied = await db.transaction(async (tx) => {
+        const [completed] = await tx
+          .update(agentRuns)
+          .set({
+            status: "succeeded",
+            codexSessionId: result.sessionId,
+            finishedAt: new Date(),
+            pid: null,
+          })
+          .where(and(eq(agentRuns.id, runId), eq(agentRuns.status, "running")))
+          .returning({ id: agentRuns.id });
+        if (!completed) return null;
+        return applyOperationInTransaction(tx, envelope, resultAuthorId);
+      });
+      if (!applied) return;
       publish({ type: "applied", clientOpId: envelope.clientOpId, ...applied });
       publish({ type: "agent_run_output", runId, text: result.summary });
       publish({ type: "agent_run_finished", runId, resultBlockId });
@@ -370,10 +392,21 @@ export async function createAgentRuntime(
           pid: null,
           errorCode: "cancelled",
         })
-        .where(eq(agentRuns.id, runId))
+        .where(
+          and(
+            eq(agentRuns.id, runId),
+            inArray(agentRuns.status, ["queued", "running"]),
+          ),
+        )
         .returning();
+      if (!updated) {
+        const current = await db.query.agentRuns.findFirst({
+          where: eq(agentRuns.id, runId),
+        });
+        return current ? serializeRun(current) : null;
+      }
       publish({ type: "agent_run_finished", runId, errorCode: "cancelled" });
-      return updated ? serializeRun(updated) : null;
+      return serializeRun(updated);
     },
     async close() {
       for (const [runId, child] of children) {

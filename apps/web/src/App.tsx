@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { parseBlockDirective } from '@dryvre/shared';
+import { parseBlockDirective, type Block } from '@dryvre/shared';
+import { api } from './api';
 import { dryvreDataSource } from './data-source';
 import { BoardView, ContextRail, DocumentView, SearchDialog, Sidebar, StreamView, Topbar } from './components';
 import type { DryvreSnapshot, SearchFilters, TaskStatus, ViewMode } from './model';
 import { blockPath, descendantsOf } from './model';
+import { ROOT_ID } from './use-tree';
 import './styles.css';
 
 export default function App() {
@@ -15,8 +17,14 @@ export default function App() {
   const [mobileTreeOpen, setMobileTreeOpen] = useState(false);
   const [searchMatches, setSearchMatches] = useState<Set<string> | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [serverBlocks, setServerBlocks] = useState<Block[]>([]);
 
   useEffect(() => { void dryvreDataSource.load().then(setSnapshot); }, []);
+  const refreshAgentTree = useCallback(async () => {
+    try { setServerBlocks((await api.tree(ROOT_ID)).blocks); }
+    catch { setServerBlocks([]); }
+  }, []);
+  useEffect(() => { void refreshAgentTree(); }, [refreshAgentTree]);
 
   const closeSearch = useCallback(() => setSearchOpen(false), []);
   useEffect(() => {
@@ -44,7 +52,11 @@ export default function App() {
   const selectedScopePath = selectedPath.slice(Math.max(0, selectedPath.findIndex((block) => block.id === scope.id)));
   const scopeBlocks = [scope, ...descendantsOf(scope.id, snapshot.blocks)];
   const selectedMessages = snapshot.messages.filter((message) => message.parentId === selected.id);
-  const agents = snapshot.blocks.filter((block) => parseBlockDirective(block.bodyMd ?? '')?.kind === 'agent');
+  const agents = serverBlocks.filter((block) => parseBlockDirective(block.bodyMd)?.kind === 'agent');
+  const agentTargets = serverBlocks.filter((block) => {
+    const directive = parseBlockDirective(block.bodyMd);
+    return block.rank !== null && !directive && !/^```agent-config\b/.test(block.bodyMd);
+  });
 
   const selectFromTree = (id: string) => { setScopeId(id); setSelectedId(id); };
   const setStatus = async (id: string, status: TaskStatus) => {
@@ -95,7 +107,7 @@ export default function App() {
       {view === 'board' && <BoardView blocks={scopeBlocks} messages={snapshot.messages} selectedId={selected.id} onSelect={setSelectedId} onStatus={(id, status) => void setStatus(id, status)} />}
       {view === 'stream' && <StreamView selected={selected} messages={selectedMessages} onSend={(body) => void sendMessage(body)} />}
     </div></main>
-    <ContextRail selected={selected} path={selectedScopePath} blocks={snapshot.blocks} references={snapshot.references} messages={selectedMessages} agents={agents} onAgentSent={() => void dryvreDataSource.load().then(setSnapshot)} onOpenStream={() => setView('stream')} />
+    <ContextRail selected={selected} path={selectedScopePath} blocks={snapshot.blocks} references={snapshot.references} messages={selectedMessages} agents={agents} agentTargets={agentTargets} onAgentSent={refreshAgentTree} onOpenStream={() => setView('stream')} />
     <SearchDialog open={searchOpen} blocks={snapshot.blocks} scopePath={scopePath} onClose={closeSearch} onApply={(filters) => void applySearch(filters)} />
   </div>;
 }

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
-import type { AgentRun } from '@dryvre/shared';
+import type { AgentRun, Block } from '@dryvre/shared';
 import type { BlockMessage, BlockReference, DryvreBlock, SearchFilters, TaskStatus, ViewMode } from './model';
 import { descendantsOf } from './model';
 import { BlockEditor, type EditorSaveResult } from './block-editor';
@@ -144,12 +144,12 @@ export function StreamView({ selected, messages, onSend }: { selected: DryvreBlo
   </div>;
 }
 
-export function ContextRail({ selected, path, blocks, references, messages, agents, onAgentSent, onOpenStream }: { selected: DryvreBlock; path: DryvreBlock[]; blocks: DryvreBlock[]; references: BlockReference[]; messages: BlockMessage[]; agents: DryvreBlock[]; onAgentSent: () => void; onOpenStream: () => void }) {
+export function ContextRail({ selected, path, blocks, references, messages, agents, agentTargets, onAgentSent, onOpenStream }: { selected: DryvreBlock; path: DryvreBlock[]; blocks: DryvreBlock[]; references: BlockReference[]; messages: BlockMessage[]; agents: Block[]; agentTargets: Block[]; onAgentSent: () => void; onOpenStream: () => void }) {
   const relevantRefs = references.filter((reference) => reference.fromId === selected.id);
   const descendants = descendantsOf(selected.id, blocks);
   return <aside className="context-rail"><header className="rail-head"><strong>Block context</strong><span>Auto-built</span></header><div className="rail-scroll"><div className="inspector-label">Selected block</div><div className="selected-card"><span className="path">{path.slice(0, -1).map((block) => block.title).join(' / ') || 'Root'}</span><h3>{selected.title}</h3><p>{selected.bodyMd ?? 'A first-class block in the shared tree.'}</p><div className="selected-meta">Updated {selected.updatedLabel} · {selected.author}</div></div>
     {messages.length > 0 && <button className="messages-card" onClick={onOpenStream}><span className="messages-icon">◉</span><span className="messages-copy"><strong>{messages.length} messages</strong><span>{[...new Set(messages.map((message) => message.author))].join(', ')}</span></span><span className="messages-arrow">→</span></button>}
-    <div className="inspector-label section-gap">Local Agents</div>{agents.length ? <AgentComposer parentId={selected.id} agents={agents} onSent={onAgentSent} /> : <p className="empty-copy">No Agent blocks in this tree.</p>}
+    <div className="inspector-label section-gap">Local Agents</div>{agents.length && agentTargets.length ? <AgentComposer agents={agents} targets={agentTargets} onSent={onAgentSent} /> : <p className="empty-copy">Connect the server tree to use local Agents.</p>}
     <div className="inspector-label section-gap">AI reads</div><ul className="context-list">{path.map((block, index) => <li className={`context-item ${block.id === selected.id ? 'current' : ''}`} key={block.id}>{block.title}<small>{block.id === selected.id ? `current block · ${descendants.length} descendants` : index === 0 ? `root · ${descendantsOf(block.id, blocks).length} descendant blocks` : 'parent block'}</small></li>)}</ul>
     <div className="inspector-label section-gap">References</div>{relevantRefs.length ? relevantRefs.map((reference) => { const target = blocks.find((block) => block.id === reference.toId); return target && <div className="reference-card" key={reference.toId}><strong>↗ {target.title}</strong><span>{reference.summary}</span></div>; }) : <p className="empty-copy">No explicit references.</p>}
   </div></aside>;
@@ -184,8 +184,9 @@ const runLabels: Record<AgentRun['status'], string> = {
   queued: 'Queued', running: 'Codex is working…', succeeded: 'Complete', failed: 'Failed', cancelled: 'Cancelled',
 };
 
-export function AgentComposer({ parentId, agents, onSent }: { parentId: string; agents: DryvreBlock[]; onSent: () => void }) {
+export function AgentComposer({ agents, targets, onSent }: { agents: Block[]; targets: Block[]; onSent: () => void }) {
   const [agentId, setAgentId] = useState(agents[0]?.id ?? '');
+  const [targetId, setTargetId] = useState(targets[0]?.id ?? '');
   const [value, setValue] = useState('');
   const [run, setRun] = useState<AgentRun>();
   const [skillNames, setSkillNames] = useState<string[]>([]);
@@ -194,6 +195,10 @@ export function AgentComposer({ parentId, agents, onSent }: { parentId: string; 
   useEffect(() => {
     if (!agents.some((agent) => agent.id === agentId)) setAgentId(agents[0]?.id ?? '');
   }, [agentId, agents]);
+
+  useEffect(() => {
+    if (!targets.some((target) => target.id === targetId)) setTargetId(targets[0]?.id ?? '');
+  }, [targetId, targets]);
 
   useEffect(() => {
     if (!agentId) return;
@@ -218,10 +223,10 @@ export function AgentComposer({ parentId, agents, onSent }: { parentId: string; 
   }, [onSent, run]);
 
   async function send() {
-    if (!agentId || !value.trim() || run && ['queued', 'running'].includes(run.status)) return;
+    if (!agentId || !targetId || !value.trim() || run && ['queued', 'running'].includes(run.status)) return;
     setError(undefined);
     try {
-      const next = await api.startAgentRun({ agentBlockId: agentId, targetBlockId: parentId, prompt: value, resume: true });
+      const next = await api.startAgentRun({ agentBlockId: agentId, targetBlockId: targetId, prompt: value, resume: true });
       setRun(next);
       setValue('');
     } catch (reason) { setError(reason instanceof Error ? reason.message : 'Could not start Agent'); }
@@ -236,7 +241,8 @@ export function AgentComposer({ parentId, agents, onSent }: { parentId: string; 
   const busy = run && ['queued', 'running'].includes(run.status);
   return <div className="agent-composer">
     <div className="agent-toolbar"><select value={agentId} onChange={(event) => setAgentId(event.target.value)} disabled={Boolean(busy)}>{agents.map((agent) => <option value={agent.id} key={agent.id}>{(agent.bodyMd ?? '').match(/^#\s+@agent\s+([^\n]+)/)?.[1] ?? 'Agent'}</option>)}</select><span>{skillNames.length ? `${skillNames.length} skills` : 'No skills'}</span></div>
-    <div className="composer"><textarea value={value} placeholder="Ask this local Codex Agent…" onChange={(event) => setValue(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); void send(); } }} /><button disabled={Boolean(busy) || !value.trim() || !agentId} onClick={() => void send()}>{busy ? 'Running' : 'Run'}</button></div>
+    <label className="agent-target"><span>Target</span><select value={targetId} onChange={(event) => setTargetId(event.target.value)} disabled={Boolean(busy)}>{targets.map((target) => <option value={target.id} key={target.id}>{target.bodyMd.replace(/^#+\s*/, '').split('\n')[0] || 'Untitled block'}</option>)}</select></label>
+    <div className="composer"><textarea value={value} placeholder="Ask this local Codex Agent…" onChange={(event) => setValue(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); void send(); } }} /><button disabled={Boolean(busy) || !value.trim() || !agentId || !targetId} onClick={() => void send()}>{busy ? 'Running' : 'Run'}</button></div>
     {run && <div className={`run-state run-${run.status}`}><i />{runLabels[run.status]}{run.errorCode && <small>{run.errorCode.replaceAll('_', ' ')}</small>}{busy && <button onClick={() => void cancel()}>Cancel</button>}</div>}
     {error && <div className="agent-error">{error}</div>}
   </div>;

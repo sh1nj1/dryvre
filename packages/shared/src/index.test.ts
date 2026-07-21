@@ -24,6 +24,10 @@ describe('shared block contract', () => {
   it('rejects unknown operations', () => {
     expect(blockOpSchema.safeParse({ type: 'archive', id: crypto.randomUUID() }).success).toBe(false);
   });
+
+  it('rejects block bodies above the shared protocol limit', () => {
+    expect(blockOpSchema.safeParse({ type: 'create', parentId: null, bodyMd: 'x'.repeat(100_001), stream: true }).success).toBe(false);
+  });
 });
 
 describe("agent and skill contracts", () => {
