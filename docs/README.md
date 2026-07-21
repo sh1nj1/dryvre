@@ -6,8 +6,6 @@ Dryvre의 장기 제품 원칙과 해커톤 제출 범위를 분리해 관리한
 
 - [제품 원칙](product-principles.md): 블록 온톨로지, 세 가지 뷰, 참조와 AI의 의미
 - [UI 규칙](ui-rules.md): 레이아웃과 상호작용에 관한 확정 결정
-- [페이지 모델 대안 A](page-model-dynamic-subtree.md): 모든 블록을 동적 서브트리 페이지로 여는 방식
-- [페이지 모델 대안 B](page-model-folder-page.md): 중첩 없는 폴더/페이지 경계를 두는 방식
 - [블록 편집기 스펙](editor-spec.md): Markdown 편집, 키보드, 저장과 충돌 계약
 - [기술 아키텍처](architecture.md): 데이터 모델, 연산 프로토콜, 동기화와 기술 선택
 - [해커톤 MVP 범위](hackathon-scope.md): 구현 목표, 데모 흐름, 비범위와 제출 체크리스트

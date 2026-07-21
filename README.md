@@ -7,8 +7,6 @@ Dryvre is a single tree of first-class Markdown blocks, rendered as a document, 
 - [Documentation index](docs/README.md)
 - [Product principles](docs/product-principles.md)
 - [UI rules](docs/ui-rules.md)
-- [Page model alternative A: dynamic subtree](docs/page-model-dynamic-subtree.md)
-- [Page model alternative B: folder and page boundary](docs/page-model-folder-page.md)
 - [Block editor specification](docs/editor-spec.md)
 - [Architecture](docs/architecture.md)
 - [Hackathon MVP scope](docs/hackathon-scope.md)

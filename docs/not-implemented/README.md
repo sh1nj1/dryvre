@@ -6,4 +6,6 @@
 
 ## 항목
 
+- [페이지 모델 대안 A](page-model-dynamic-subtree.md): 모든 블록을 동적 서브트리 페이지로 여는 방식
+- [페이지 모델 대안 B](page-model-folder-page.md): 중첩 없는 폴더/페이지 경계를 두는 방식
 - [결정론적 문서 투영](document-projection.md): 순수 블록 모델 위에서 문서 범위를 제한적으로 투영하는 후보 설계
