@@ -55,7 +55,7 @@
     },
     {
       "action": "click",
-      "selector": ".column:nth-child(2) .card:first-child",
+      "selector": "article.card:has(select[aria-label='Change status for Record the three-minute product story'])",
       "pauseAfterMs": 800
     },
     {
@@ -67,7 +67,7 @@
     {
       "action": "assertText",
       "selector": ".stream-layout",
-      "text": "Dryvre AI"
+      "text": "All launch checks passed"
     },
     {
       "action": "goto",
