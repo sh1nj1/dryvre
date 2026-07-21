@@ -91,6 +91,18 @@ def write_srt(timeline_path: Path, srt_path: Path) -> int:
     return len(captions)
 
 
+def prepare_output_directory(output: Path, project_root: Path) -> None:
+    if output == project_root:
+        raise RuntimeError("output directory cannot be the project root")
+    if output.exists():
+        if not output.is_dir():
+            raise RuntimeError(f"output path is not a directory: {output}")
+        if any(output.iterdir()):
+            raise RuntimeError(f"output directory must be new or empty: {output}")
+    else:
+        output.mkdir(parents=True)
+
+
 def add_macos_voiceover(silent_video: Path, timeline_path: Path, final_video: Path, voice: str, rate: int) -> int:
     if not shutil.which("say"):
         raise RuntimeError("macOS `say` was not found; use --voiceover none and provide audio separately")
@@ -146,8 +158,8 @@ def main() -> int:
     scenario = args.scenario.resolve()
     fixtures = args.fixtures.resolve() if args.fixtures else None
     output = args.output_dir.resolve()
-    output.mkdir(parents=True, exist_ok=True)
     project_root = args.project_root.resolve()
+    prepare_output_directory(output, project_root)
     playwright_root, environment = ensure_playwright(project_root, args.playwright_root, args.no_install)
 
     server = None
